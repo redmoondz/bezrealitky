@@ -1,3 +1,4 @@
+import json
 from unittest import TestCase
 
 from src.scraper import parse_listing, parse_page
@@ -30,6 +31,16 @@ LISTING_HTML = """
   <section><span>+ Service charges</span><strong>CZK 1,225</strong></section>
   <section><span>+ Utility charges</span><strong>CZK 2,500</strong></section>
   <section><span>+ Refundable deposit</span><strong>CZK 20,000</strong></section>
+  <script id="__NEXT_DATA__" type="application/json">
+    {"props":{"pageProps":{"origAdvert":{
+      "id":"875675",
+      "gps":{"lat":49.1270319,"lng":16.6163858},
+      "publicImages":[
+        {"url":"https://api.bezrealitky.cz/media/cache/record_main/data/images/advert/875k/875675/first.jpg"},
+        {"url":"https://api.bezrealitky.cz/media/cache/record_main/data/images/advert/875k/875675/second.jpg"}
+      ]
+    }}}}
+  </script>
 </main>
 """
 
@@ -65,4 +76,32 @@ class ScraperTests(TestCase):
         self.assertEqual(listing.currency, "CZK")
         self.assertEqual(listing.price_per_unit, "433.33")
         self.assertEqual(listing.location, "Za Humny, Modřice")
+        self.assertEqual(listing.latitude, "49.1270319")
+        self.assertEqual(listing.longitude, "16.6163858")
+        self.assertEqual(
+            json.loads(listing.images),
+            [
+                "https://api.bezrealitky.cz/media/cache/record_main/data/images/advert/875k/875675/first.jpg",
+                "https://api.bezrealitky.cz/media/cache/record_main/data/images/advert/875k/875675/second.jpg",
+            ],
+        )
         self.assertEqual(listing.description, "First paragraph.\nSecond paragraph.")
+
+    def test_uses_listing_specific_html_image_fallback(self):
+        html = """
+        <a href="https://api.bezrealitky.cz/media/cache/record_main/data/images/advert/875k/875675/one.jpg">One</a>
+        <a href="https://api.bezrealitky.cz/media/cache/record_main/data/images/advert/875k/875675/one.jpg">Duplicate</a>
+        <a href="https://api.bezrealitky.cz/media/cache/record_main/data/images/advert/999k/999999/other.jpg">Other listing</a>
+        """
+        listing = parse_listing(
+            html,
+            "https://www.bezrealitky.com/properties-flats-houses/875675-example",
+        )
+        self.assertEqual(
+            json.loads(listing.images),
+            [
+                "https://api.bezrealitky.cz/media/cache/record_main/data/images/advert/875k/875675/one.jpg"
+            ],
+        )
+        self.assertEqual(listing.latitude, "")
+        self.assertEqual(listing.longitude, "")

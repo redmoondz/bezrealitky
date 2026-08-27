@@ -1,0 +1,9 @@
+.git
+.gitignore
+.playwright-cli
+.venv
+__pycache__
+*.py[cod]
+output
+tests
+url_build.txt

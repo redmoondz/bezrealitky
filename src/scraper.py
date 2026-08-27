@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import logging
 import re
 import time
@@ -33,6 +34,7 @@ class Listing:
     total_price: str = ""
     currency: str = ""
     url: str = ""
+    images: str = "[]"
     available_from: str = ""
     monthly_rent: str = ""
     refundable_deposit: str = ""
@@ -40,6 +42,8 @@ class Listing:
     utility_charges: str = ""
     price_per_unit: str = ""
     location: str = ""
+    latitude: str = ""
+    longitude: str = ""
     description: str = ""
     heating: str = ""
     floor: str = ""
@@ -243,11 +247,95 @@ def extract_heading(soup: BeautifulSoup) -> tuple[str, str]:
     return name, location
 
 
+def extract_advert_data(soup: BeautifulSoup, listing_id: str) -> dict:
+    """Return structured advert data embedded by Next.js in the detail page."""
+    script = soup.select_one("script#__NEXT_DATA__")
+    if script is None:
+        return {}
+    try:
+        payload = json.loads(script.string or script.get_text())
+    except (json.JSONDecodeError, TypeError):
+        return {}
+
+    page_props = payload.get("props", {}).get("pageProps", {})
+    if not isinstance(page_props, dict):
+        return {}
+    advert = page_props.get("origAdvert")
+    if isinstance(advert, dict) and str(advert.get("id", "")) == listing_id:
+        return advert
+
+    cache = page_props.get("apolloCache", {})
+    cached_advert = cache.get(f"Advert:{listing_id}") if isinstance(cache, dict) else None
+    return cached_advert if isinstance(cached_advert, dict) else {}
+
+
+def is_listing_image_url(value: object, listing_id: str) -> bool:
+    if not isinstance(value, str):
+        return False
+    parsed = urlparse(value)
+    hostname = (parsed.hostname or "").lower()
+    return (
+        parsed.scheme == "https"
+        and (hostname == "bezrealitky.cz" or hostname.endswith(".bezrealitky.cz"))
+        and f"/{listing_id}/" in parsed.path
+    )
+
+
+def extract_image_urls(soup: BeautifulSoup, advert: dict, listing_id: str) -> list[str]:
+    """Extract ordered, unique gallery image URLs with an HTML fallback."""
+    public_images = advert.get("publicImages", [])
+    candidates: list[object] = []
+    if isinstance(public_images, list):
+        candidates.extend(
+            image.get("url") for image in public_images if isinstance(image, dict)
+        )
+
+    images: list[str] = []
+    seen: set[str] = set()
+    for source in (
+        candidates,
+        [anchor.get("href") for anchor in soup.select("a[href]")],
+    ):
+        for candidate in source:
+            if not is_listing_image_url(candidate, listing_id) or candidate in seen:
+                continue
+            seen.add(candidate)
+            images.append(candidate)
+        if images:
+            break
+    return images
+
+
+def extract_coordinates(advert: dict) -> tuple[str, str]:
+    """Extract validated WGS84 latitude/longitude from the map's GPS payload."""
+    gps = advert.get("gps")
+    if not isinstance(gps, dict):
+        return "", ""
+    latitude = parse_number(str(gps.get("lat", "")))
+    longitude = parse_number(str(gps.get("lng", "")))
+    if latitude is None or longitude is None:
+        return "", ""
+    if not Decimal("-90") <= latitude <= Decimal("90"):
+        return "", ""
+    if not Decimal("-180") <= longitude <= Decimal("180"):
+        return "", ""
+    return format_number(latitude), format_number(longitude)
+
+
 def parse_listing(content: str, listing_url: str) -> Listing:
     """Parse one publication detail page into a normalized CSV row."""
     soup = BeautifulSoup(content, "html.parser")
     table = extract_table_values(soup)
     name, location = extract_heading(soup)
+
+    listing_id = table.get("listing id", "")
+    if not listing_id:
+        path_match = LISTING_PATH_RE.match(urlparse(listing_url).path)
+        listing_id = path_match.group("id") if path_match else ""
+
+    advert = extract_advert_data(soup, listing_id)
+    images = extract_image_urls(soup, advert, listing_id)
+    latitude, longitude = extract_coordinates(advert)
 
     monthly_raw = extract_labeled_value(soup, "Monthly rent")
     service_raw = extract_labeled_value(soup, "Service charges")
@@ -258,11 +346,6 @@ def parse_listing(content: str, listing_url: str) -> Listing:
     utilities = parse_number(utilities_raw)
     recurring = [value for value in (monthly, service, utilities) if value is not None]
 
-    listing_id = table.get("listing id", "")
-    if not listing_id:
-        path_match = LISTING_PATH_RE.match(urlparse(listing_url).path)
-        listing_id = path_match.group("id") if path_match else ""
-
     price_per_unit_raw = table.get("price per unit", "")
     return Listing(
         listing_id=listing_id,
@@ -272,6 +355,7 @@ def parse_listing(content: str, listing_url: str) -> Listing:
         total_price=format_number(sum(recurring, Decimal("0"))) if recurring else "",
         currency=extract_currency(monthly_raw, service_raw, utilities_raw, price_per_unit_raw),
         url=listing_url,
+        images=json.dumps(images, ensure_ascii=False, separators=(",", ":")),
         available_from=table.get("available from", ""),
         monthly_rent=format_number(monthly),
         refundable_deposit=format_number(parse_number(deposit_raw)),
@@ -279,6 +363,8 @@ def parse_listing(content: str, listing_url: str) -> Listing:
         utility_charges=format_number(utilities),
         price_per_unit=format_number(parse_number(price_per_unit_raw)),
         location=location,
+        latitude=latitude,
+        longitude=longitude,
         description=extract_description(soup),
         heating=table.get("heating", ""),
         floor=table.get("floor", ""),

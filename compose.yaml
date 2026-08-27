@@ -1,0 +1,8 @@
+services:
+  scraper:
+    build:
+      context: .
+    image: bezrealitky-parser:local
+    volumes:
+      - ./config:/app/config
+      - ./output:/app/output

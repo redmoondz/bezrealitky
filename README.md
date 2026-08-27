@@ -3,6 +3,11 @@
 The parser reads every page of a Bezrealitky search, deduplicates publication
 links, opens every publication, and writes the normalized data to CSV.
 
+The `images` CSV cell contains a JSON array of ordered gallery URLs. Exact map
+coordinates are stored separately in `latitude` and `longitude` (WGS84). These
+values come from the same structured `gps` payload used by the site's MapLibre
+marker.
+
 ## Setup
 
 ```bash
@@ -46,3 +51,32 @@ python3 -m src.cli --price_from 750 --price_to 1200 --run
 The default output is `output/bezrealitky_listings.csv`. A non-zero exit code
 means that one or more discovered publications could not be fetched or parsed;
 successfully parsed rows are still saved.
+
+## Docker
+
+Build the image:
+
+```bash
+docker compose build
+```
+
+The container entrypoint is the same CLI. The Compose service mounts `config/`
+and `output/`, so config updates and generated CSV files persist on the host:
+
+```bash
+docker compose run --rm scraper --show
+docker compose run --rm scraper --price_from 750 --price_to 1200
+docker compose run --rm scraper --url 'https://www.bezrealitky.com/search?estateType=BYT&offerType=PRONAJEM'
+docker compose run --rm scraper --reset
+docker compose run --rm scraper --run
+```
+
+Without Compose:
+
+```bash
+docker build -t bezrealitky-parser .
+docker run --rm \
+  -v "$PWD/config:/app/config" \
+  -v "$PWD/output:/app/output" \
+  bezrealitky-parser --run
+```
