@@ -1,8 +1,80 @@
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-bezrealitky}
+      POSTGRES_USER: ${POSTGRES_USER:-bezrealitky}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bezrealitky}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # Self-hosted, free machine translation for listing descriptions (mostly
+  # Czech) into whatever language a Telegram user picked via /start or
+  # /language. Only the languages the bot actually offers are loaded.
+  translate:
+    image: libretranslate/libretranslate:latest
+    environment:
+      LT_LOAD_ONLY: en,cs,ru,uk
+      LT_DISABLE_WEB_UI: "true"
+    volumes:
+      - translate_data:/home/libretranslate/.local
+    restart: unless-stopped
+
+  # Ad-hoc CLI runs. `--run` only ever touches CSV, unchanged from before
+  # Postgres/the bot; env_file is here only so `--entrypoint python3 scraper -m
+  # src.migrate` (a one-off, not part of --run) can reach Postgres.
   scraper:
     build:
       context: .
     image: bezrealitky-parser:local
+    env_file: .env
+    environment:
+      POSTGRES_HOST: db
     volumes:
       - ./config:/app/config
       - ./output:/app/output
+
+  # Long-running loop (same image as `scraper`, different entrypoint): re-scrapes
+  # the saved search every SCRAPE_INTERVAL_HOURS and syncs it into Postgres.
+  scheduler:
+    build:
+      context: .
+    image: bezrealitky-parser:local
+    entrypoint: ["python3", "-m", "src.scheduler"]
+    env_file: .env
+    environment:
+      POSTGRES_HOST: db
+    volumes:
+      - ./config:/app/config
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.bot
+    image: bezrealitky-bot:local
+    env_file: .env
+    environment:
+      POSTGRES_HOST: db
+      TRANSLATE_URL: http://translate:5000/translate
+    volumes:
+      - ./config:/app/config
+    depends_on:
+      db:
+        condition: service_healthy
+      translate:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  translate_data:

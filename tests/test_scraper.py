@@ -86,6 +86,10 @@ class ScraperTests(TestCase):
             ],
         )
         self.assertEqual(listing.description, "First paragraph.\nSecond paragraph.")
+        self.assertEqual(listing.floor, "2. floor out of 2")
+        self.assertEqual(listing.floor_number, "2")
+        self.assertEqual(listing.floor_total, "2")
+        self.assertEqual(listing.pets_friendly, "")
 
     def test_uses_listing_specific_html_image_fallback(self):
         html = """

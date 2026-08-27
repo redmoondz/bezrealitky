@@ -1,6 +1,6 @@
 version: 1
 search:
-  url: https://www.bezrealitky.com/search?disposition=DISP_1_1&disposition=DISP_1_KK&disposition=DISP_2_1&disposition=DISP_2_KK&equipped=CASTECNE&equipped=VYBAVENY&estateType=BYT&location=exact&offerType=PRONAJEM&osm_value=Brno%2C+okres+Brno-m%C4%9Bsto%2C+South+Moravian+Region%2C+Czechia&priceFrom=500&priceTo=1000&regionOsmIds=R438171&roommate=false&currency=EUR&polygonBuffer=2000&searchPriceWithCharges=true
+  url: https://www.bezrealitky.com/search?currency=EUR&estateType=BYT&offerType=PRONAJEM&osm_value=Brno%2C+okres+Brno-m%C4%9Bsto%2C+South+Moravian+Region%2C+Czechia&priceTo=1500&regionOsmIds=R438171&location=exact
 scraper:
   output_csv: output/bezrealitky_listings.csv
   request_timeout_seconds: 30

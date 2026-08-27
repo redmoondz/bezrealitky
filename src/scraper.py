@@ -18,6 +18,13 @@ from bs4 import BeautifulSoup, Tag
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+try:
+    from .floor import parse_floor
+    from .pets import classify_pets_friendly
+except ImportError:  # Support: python3 src/scraper.py
+    from floor import parse_floor  # type: ignore[no-redef]
+    from pets import classify_pets_friendly  # type: ignore[no-redef]
+
 LOGGER = logging.getLogger(__name__)
 
 LISTING_PATH_RE = re.compile(r"^/properties-flats-houses/(?P<id>\d+)(?:-|$)")
@@ -47,7 +54,10 @@ class Listing:
     description: str = ""
     heating: str = ""
     floor: str = ""
+    floor_number: str = ""
+    floor_total: str = ""
     fully_furnished: str = ""
+    pets_friendly: str = ""
 
 
 CSV_FIELDS = list(Listing.__dataclass_fields__)
@@ -347,6 +357,9 @@ def parse_listing(content: str, listing_url: str) -> Listing:
     recurring = [value for value in (monthly, service, utilities) if value is not None]
 
     price_per_unit_raw = table.get("price per unit", "")
+    floor_raw = table.get("floor", "")
+    floor_number, floor_total = parse_floor(floor_raw)
+    description = extract_description(soup)
     return Listing(
         listing_id=listing_id,
         name=name,
@@ -365,10 +378,13 @@ def parse_listing(content: str, listing_url: str) -> Listing:
         location=location,
         latitude=latitude,
         longitude=longitude,
-        description=extract_description(soup),
+        description=description,
         heating=table.get("heating", ""),
-        floor=table.get("floor", ""),
+        floor=floor_raw,
+        floor_number=floor_number,
+        floor_total=floor_total,
         fully_furnished=table.get("fully furnished", ""),
+        pets_friendly=classify_pets_friendly(description),
     )
 
 
@@ -386,8 +402,12 @@ def write_csv(path: Path, listings: Iterable[Listing]) -> int:
     return count
 
 
-def scrape(config: dict) -> tuple[int, list[str]]:
-    """Discover every publication, parse it, and save the results to CSV."""
+def discover_and_parse(config: dict) -> tuple[list[Listing], list[str]]:
+    """Discover every publication for the configured search and parse each one.
+
+    Shared by the CSV pipeline (:func:`scrape`) and the database-backed scheduler,
+    so both write identical, independently derived listing data.
+    """
     search = config["search"]
     settings = config["scraper"]
     timeout = float(settings["request_timeout_seconds"])
@@ -408,13 +428,18 @@ def scrape(config: dict) -> tuple[int, list[str]]:
                 failures.append(listing_url)
             if index < len(urls) and delay:
                 time.sleep(delay)
-
-        output_path = Path(str(settings["output_csv"]))
-        written = write_csv(output_path, parsed)
-        LOGGER.info("Saved %d publications to %s", written, output_path)
-        return written, failures
+        return parsed, failures
     finally:
         session.close()
+
+
+def scrape(config: dict) -> tuple[int, list[str]]:
+    """Discover every publication, parse it, and save the results to CSV."""
+    parsed, failures = discover_and_parse(config)
+    output_path = Path(str(config["scraper"]["output_csv"]))
+    written = write_csv(output_path, parsed)
+    LOGGER.info("Saved %d publications to %s", written, output_path)
+    return written, failures
 
 
 def main() -> int:
