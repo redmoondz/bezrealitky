@@ -31,17 +31,20 @@ def _load_page(telegram_user_id: int, offset: int) -> tuple[int, dict | None, st
         return total, (rows[0] if rows else None), language
 
 
-def _load_detail(listing_id: str, telegram_user_id: int) -> tuple[dict | None, str, str]:
+def _load_detail(listing_id: str, telegram_user_id: int) -> tuple[dict | None, str, str, bool]:
     with db.connect() as conn:
         db.ensure_schema(conn)
         row = db.fetch_listing(conn, listing_id)
         if row is None:
-            return None, "", ""
+            return None, "", "", True
         language = db.get_user_language(conn, telegram_user_id)
         row["score"] = db.get_relevance_score(conn, telegram_user_id, listing_id)
     description = row.get("description") or ""
-    translated = translate_description(description, language) if description else ""
-    return row, translated, language
+    if description:
+        translated, translation_ok = translate_description(description, language)
+    else:
+        translated, translation_ok = "", True
+    return row, translated, language, translation_ok
 
 
 async def _send_page(message: Message, telegram_user_id: int, offset: int) -> None:
@@ -80,7 +83,9 @@ async def _edit_page(query: CallbackQuery, telegram_user_id: int, offset: int) -
 
 
 async def _send_detail(target: Message, listing_id: str, telegram_user_id: int) -> None:
-    row, translated, language = await asyncio.to_thread(_load_detail, listing_id, telegram_user_id)
+    row, translated, language, translation_ok = await asyncio.to_thread(
+        _load_detail, listing_id, telegram_user_id
+    )
     if row is None:
         await target.answer(f"No listing found with ID {listing_id}.")
         return
@@ -89,7 +94,9 @@ async def _send_detail(target: Message, listing_id: str, telegram_user_id: int) 
         await target.answer_media_group([InputMediaPhoto(media=url) for url in images[:10]])
     elif images:
         await target.answer_photo(images[0])
-    await target.answer(formatting.detail_text(row, translated, language), parse_mode="HTML")
+    await target.answer(
+        formatting.detail_text(row, translated, language, translation_ok), parse_mode="HTML"
+    )
     latitude, longitude = row.get("latitude"), row.get("longitude")
     if latitude is not None and longitude is not None:
         # A native Telegram map bubble (with an "Open in Maps" button) — no

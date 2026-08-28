@@ -44,17 +44,24 @@ def _mark_notified(telegram_user_id: int, listing_ids: list[str]) -> None:
 
 
 async def _notify_one(bot: Bot, telegram_user_id: int, row: dict, language: str) -> None:
-    header = "🆕 <b>New match in your saved search</b>\n\n" + formatting.detail_text(row, "", language)
+    description = row.get("description") or ""
+    if description:
+        translated, translation_ok = await asyncio.to_thread(
+            translate_description, description, language
+        )
+    else:
+        translated, translation_ok = "", True
+    text = "🆕 <b>New match in your saved search</b>\n\n" + formatting.detail_text(
+        row, translated, language, translation_ok
+    )
     images = row.get("images") or []
     try:
+        # Sent without a caption (unlike a caption, message text isn't capped at
+        # 1024 chars) — one message holds everything: details and description
+        # together, matching /view's "Full details" card.
         if images:
-            await bot.send_photo(telegram_user_id, images[0], caption=header[:1024], parse_mode="HTML")
-        else:
-            await bot.send_message(telegram_user_id, header, parse_mode="HTML")
-        description = row.get("description") or ""
-        if description:
-            translated = await asyncio.to_thread(translate_description, description, language)
-            await bot.send_message(telegram_user_id, translated[:4096])
+            await bot.send_photo(telegram_user_id, images[0])
+        await bot.send_message(telegram_user_id, text, parse_mode="HTML")
     except Exception:  # noqa: BLE001 - one bad send must not stop the others
         LOGGER.exception(
             "Failed to notify user %s about listing %s", telegram_user_id, row["listing_id"]

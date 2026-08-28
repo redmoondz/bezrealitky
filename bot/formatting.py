@@ -66,11 +66,17 @@ def summary_caption(row: dict, offset: int, total: int, language: str = "en") ->
     )
 
 
-def detail_text(row: dict, description: str, language: str = "en") -> str:
-    """Full detail text for /view (Telegram message text is capped at 4096 chars)."""
+_MESSAGE_LIMIT = 4096
+
+
+def detail_text(row: dict, description: str, language: str = "en", translation_ok: bool = True) -> str:
+    """Full detail text for /view and new-match notifications — the whole card
+    (details + description) as one message, description collapsed into an
+    expandable quote (Telegram message text is capped at 4096 chars).
+    """
     area = f"{row['area']} m²" if row.get("area") is not None else "—"
     pets = _PETS_LABELS.get(row.get("pets_friendly"))
-    body = (
+    header = (
         f"{_top_match_badge(row)}"
         f"<b>{escape(row.get('name') or 'Untitled listing')}</b>\n"
         f"💰 Rent: {_price_text(row)}   💵 Deposit: {_deposit_text(row)}\n"
@@ -80,6 +86,18 @@ def detail_text(row: dict, description: str, language: str = "en") -> str:
         f"{_tags_line(language, row)}"
         f"🔗 <a href=\"{escape(row.get('url') or '')}\">Open on Bezrealitky</a>\n"
     )
-    if description:
-        body += f"\n{escape(description)}"
-    return body[:4096]
+    if not description:
+        return header[:_MESSAGE_LIMIT]
+
+    note = f"{i18n.translation_failed_note(language)}\n" if not translation_ok else ""
+    prefix = f"\n{note}<blockquote expandable>"
+    suffix = "</blockquote>"
+    # Truncate the description itself (never the surrounding text), so a long
+    # description can never leave a truncated, unclosed <blockquote> tag behind
+    # — that would make Telegram reject the whole message instead of just
+    # cutting the quote short.
+    budget = _MESSAGE_LIMIT - len(header) - len(prefix) - len(suffix)
+    escaped_description = escape(description)
+    if budget <= 0:
+        return header[:_MESSAGE_LIMIT]
+    return header + prefix + escaped_description[:budget] + suffix

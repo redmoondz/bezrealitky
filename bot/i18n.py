@@ -30,6 +30,17 @@ _CHARTS_BUTTON = {
     "uk": "📊 Графіки",
 }
 
+_TRANSLATION_FAILED_NOTE = {
+    "en": "⚠️ Translation temporarily unavailable — showing the original text:",
+    "cs": "⚠️ Překlad je dočasně nedostupný — zobrazen původní text:",
+    "ru": "⚠️ Перевод временно недоступен — показан оригинальный текст:",
+    "uk": "⚠️ Переклад тимчасово недоступний — показано оригінальний текст:",
+}
+
+
+def translation_failed_note(language: str) -> str:
+    return _TRANSLATION_FAILED_NOTE.get(language, _TRANSLATION_FAILED_NOTE[_DEFAULT_LANGUAGE])
+
 # Emoji is the actual color-coding here — Telegram's HTML/MarkdownV2 parse modes
 # have no colored-text feature, so a distinct emoji per amenity is the only
 # per-tag visual distinction the message text can actually carry.
