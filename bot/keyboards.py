@@ -36,6 +36,24 @@ def onboarding_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+def pets_preference_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🐾 Yes", callback_data="pets_pref:yes"),
+                InlineKeyboardButton(text="🚫 No", callback_data="pets_pref:no"),
+            ],
+            [InlineKeyboardButton(text="⏭ Skip", callback_data="pets_pref:skip")],
+        ]
+    )
+
+
+def skip_keyboard(callback_data: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="⏭ Skip", callback_data=callback_data)]]
+    )
+
+
 def listing_keyboard(listing_id: str, url: str, offset: int, total: int) -> InlineKeyboardMarkup:
     nav_row = []
     if offset > 0:

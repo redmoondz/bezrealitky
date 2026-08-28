@@ -44,7 +44,7 @@ def _mark_notified(telegram_user_id: int, listing_ids: list[str]) -> None:
 
 
 async def _notify_one(bot: Bot, telegram_user_id: int, row: dict, language: str) -> None:
-    header = "🆕 <b>New match in your saved search</b>\n\n" + formatting.detail_text(row, "")
+    header = "🆕 <b>New match in your saved search</b>\n\n" + formatting.detail_text(row, "", language)
     images = row.get("images") or []
     try:
         if images:

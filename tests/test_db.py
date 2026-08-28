@@ -25,6 +25,7 @@ class RowFromListingTests(TestCase):
             floor_number="2",
             floor_total="4",
             pets_friendly="True",
+            air_conditioning="False",
         )
         row = db.row_from_listing(listing)
         self.assertEqual(row["area"], Decimal("30.5"))
@@ -32,7 +33,28 @@ class RowFromListingTests(TestCase):
         self.assertEqual(row["floor_number"], 2)
         self.assertEqual(row["floor_total"], 4)
         self.assertIs(row["pets_friendly"], True)
+        self.assertIs(row["air_conditioning"], False)
         self.assertEqual(row["images"].obj, ["https://example/a.jpg", "https://example/b.jpg"])
+
+    def test_converts_every_boolean_column_not_just_pets(self):
+        listing = Listing(
+            listing_id="1",
+            pets_friendly="True",
+            air_conditioning="False",
+            has_washing_machine="True",
+            has_dryer="",
+            has_internet="True",
+            has_dishwasher="False",
+            mansard="True",
+        )
+        row = db.row_from_listing(listing)
+        self.assertIs(row["pets_friendly"], True)
+        self.assertIs(row["air_conditioning"], False)
+        self.assertIs(row["has_washing_machine"], True)
+        self.assertIsNone(row["has_dryer"])
+        self.assertIs(row["has_internet"], True)
+        self.assertIs(row["has_dishwasher"], False)
+        self.assertIs(row["mansard"], True)
 
     def test_blank_optional_fields_become_none(self):
         listing = Listing(listing_id="1", images="[]")
@@ -51,6 +73,14 @@ class RowFromListingTests(TestCase):
         listing = Listing(listing_id="1", images="not json")
         row = db.row_from_listing(listing)
         self.assertEqual(row["images"].obj, [])
+
+
+class SetUserPreferenceTests(TestCase):
+    def test_rejects_unknown_column_before_touching_the_connection(self):
+        # The column-name whitelist check runs before any connection use, so a
+        # deliberately unusable ``conn`` still proves the guard fires first.
+        with self.assertRaises(ValueError):
+            db.set_user_preference(None, 1, "not_a_real_column", "x")
 
 
 class DsnTests(TestCase):

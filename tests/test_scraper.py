@@ -1,7 +1,7 @@
 import json
 from unittest import TestCase
 
-from src.scraper import parse_listing, parse_page
+from src.scraper import extract_pets_friendly, parse_listing, parse_page
 
 
 SEARCH_HTML = """
@@ -26,6 +26,9 @@ LISTING_HTML = """
     <tr><th>Fully furnished</th><td>Partly</td></tr>
     <tr><th>Heating</th><td>Electric boiler</td></tr>
     <tr><th>Usable area</th><td>30 m²</td></tr>
+    <tr><th>Building construction</th><td>Brick</td></tr>
+    <tr><th>Condition</th><td>New-build</td></tr>
+    <tr><th>Location</th><td>Centre</td></tr>
   </table>
   <section><span>Monthly rent</span><strong>CZK 13,000</strong></section>
   <section><span>+ Service charges</span><strong>CZK 1,225</strong></section>
@@ -89,7 +92,16 @@ class ScraperTests(TestCase):
         self.assertEqual(listing.floor, "2. floor out of 2")
         self.assertEqual(listing.floor_number, "2")
         self.assertEqual(listing.floor_total, "2")
+        self.assertEqual(listing.construction, "Brick")
+        self.assertEqual(listing.condition, "New-build")
+        self.assertEqual(listing.surroundings, "Centre")
         self.assertEqual(listing.pets_friendly, "")
+        self.assertEqual(listing.air_conditioning, "")
+        self.assertEqual(listing.has_washing_machine, "")
+        self.assertEqual(listing.has_dryer, "")
+        self.assertEqual(listing.has_internet, "")
+        self.assertEqual(listing.has_dishwasher, "")
+        self.assertEqual(listing.mansard, "")
 
     def test_uses_listing_specific_html_image_fallback(self):
         html = """
@@ -109,3 +121,43 @@ class ScraperTests(TestCase):
         )
         self.assertEqual(listing.latitude, "")
         self.assertEqual(listing.longitude, "")
+
+    def test_structured_pet_friendly_field_overrides_fuzzy_classification(self):
+        html = """
+        <div role="tabpanel"><p>Pets welcome, dogs and cats both allowed!</p></div>
+        <script id="__NEXT_DATA__" type="application/json">
+          {"props":{"pageProps":{"origAdvert":{"id":"875675","petFriendly":false}}}}
+        </script>
+        """
+        listing = parse_listing(
+            html, "https://www.bezrealitky.com/properties-flats-houses/875675-example"
+        )
+        self.assertEqual(listing.pets_friendly, "False")
+
+    def test_falls_back_to_fuzzy_classification_when_pet_friendly_field_is_null(self):
+        html = """
+        <div role="tabpanel"><p>Pets welcome, dogs and cats both allowed!</p></div>
+        <script id="__NEXT_DATA__" type="application/json">
+          {"props":{"pageProps":{"origAdvert":{"id":"875675","petFriendly":null}}}}
+        </script>
+        """
+        listing = parse_listing(
+            html, "https://www.bezrealitky.com/properties-flats-houses/875675-example"
+        )
+        self.assertEqual(listing.pets_friendly, "True")
+
+
+class ExtractPetsFriendlyTests(TestCase):
+    def test_true_field_wins_even_with_no_description_signal(self):
+        self.assertEqual(extract_pets_friendly({"petFriendly": True}, "Nothing relevant here."), "True")
+
+    def test_false_field_wins_over_a_positive_sounding_description(self):
+        self.assertEqual(
+            extract_pets_friendly({"petFriendly": False}, "Pets welcome!"), "False"
+        )
+
+    def test_missing_field_falls_back_to_fuzzy_classification(self):
+        self.assertEqual(extract_pets_friendly({}, "Pets welcome!"), "True")
+
+    def test_null_field_falls_back_to_fuzzy_classification(self):
+        self.assertEqual(extract_pets_friendly({"petFriendly": None}, "No pets allowed."), "False")

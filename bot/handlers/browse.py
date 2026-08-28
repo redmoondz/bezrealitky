@@ -22,35 +22,37 @@ from ..translate import translate_description
 router = Router(name="browse")
 
 
-def _load_page(telegram_user_id: int, offset: int) -> tuple[int, dict | None]:
+def _load_page(telegram_user_id: int, offset: int) -> tuple[int, dict | None, str]:
     with db.connect() as conn:
         db.ensure_schema(conn)
         total = db.count_relevant_listings(conn, telegram_user_id)
         rows = db.fetch_relevant_listings_page(conn, telegram_user_id, offset, PAGE_SIZE)
-        return total, (rows[0] if rows else None)
+        language = db.get_user_language(conn, telegram_user_id)
+        return total, (rows[0] if rows else None), language
 
 
-def _load_detail(listing_id: str, telegram_user_id: int) -> tuple[dict | None, str]:
+def _load_detail(listing_id: str, telegram_user_id: int) -> tuple[dict | None, str, str]:
     with db.connect() as conn:
         db.ensure_schema(conn)
         row = db.fetch_listing(conn, listing_id)
         if row is None:
-            return None, ""
+            return None, "", ""
         language = db.get_user_language(conn, telegram_user_id)
+        row["score"] = db.get_relevance_score(conn, telegram_user_id, listing_id)
     description = row.get("description") or ""
     translated = translate_description(description, language) if description else ""
-    return row, translated
+    return row, translated, language
 
 
 async def _send_page(message: Message, telegram_user_id: int, offset: int) -> None:
-    total, row = await asyncio.to_thread(_load_page, telegram_user_id, offset)
+    total, row, language = await asyncio.to_thread(_load_page, telegram_user_id, offset)
     if row is None:
         await message.answer(
             "No listings match your saved search yet. Try /parse to scrape now, "
             "or /search to see what's saved."
         )
         return
-    caption = formatting.summary_caption(row, offset, total)
+    caption = formatting.summary_caption(row, offset, total, language)
     keyboard = listing_keyboard(row["listing_id"], row["url"], offset, total)
     images = row.get("images") or []
     if images:
@@ -60,11 +62,11 @@ async def _send_page(message: Message, telegram_user_id: int, offset: int) -> No
 
 
 async def _edit_page(query: CallbackQuery, telegram_user_id: int, offset: int) -> None:
-    total, row = await asyncio.to_thread(_load_page, telegram_user_id, offset)
+    total, row, language = await asyncio.to_thread(_load_page, telegram_user_id, offset)
     if row is None or not query.message:
         await query.answer("No more listings.", show_alert=True)
         return
-    caption = formatting.summary_caption(row, offset, total)
+    caption = formatting.summary_caption(row, offset, total, language)
     keyboard = listing_keyboard(row["listing_id"], row["url"], offset, total)
     images = row.get("images") or []
     if images:
@@ -78,7 +80,7 @@ async def _edit_page(query: CallbackQuery, telegram_user_id: int, offset: int) -
 
 
 async def _send_detail(target: Message, listing_id: str, telegram_user_id: int) -> None:
-    row, translated = await asyncio.to_thread(_load_detail, listing_id, telegram_user_id)
+    row, translated, language = await asyncio.to_thread(_load_detail, listing_id, telegram_user_id)
     if row is None:
         await target.answer(f"No listing found with ID {listing_id}.")
         return
@@ -87,7 +89,13 @@ async def _send_detail(target: Message, listing_id: str, telegram_user_id: int) 
         await target.answer_media_group([InputMediaPhoto(media=url) for url in images[:10]])
     elif images:
         await target.answer_photo(images[0])
-    await target.answer(formatting.detail_text(row, translated), parse_mode="HTML")
+    await target.answer(formatting.detail_text(row, translated, language), parse_mode="HTML")
+    latitude, longitude = row.get("latitude"), row.get("longitude")
+    if latitude is not None and longitude is not None:
+        # A native Telegram map bubble (with an "Open in Maps" button) — no
+        # static-map image to generate, no maps API key, no dependence on
+        # whether a plain Google Maps link happens to get a link preview.
+        await target.answer_location(float(latitude), float(longitude))
 
 
 # Each command is registered twice: the allowed-only handler first, a plain

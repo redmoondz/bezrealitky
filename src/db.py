@@ -27,8 +27,10 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Json
 
 try:
+    from .scoring import compute_score
     from .scraper import Listing
 except ImportError:  # Support: python3 src/db.py
+    from scoring import compute_score  # type: ignore[no-redef]
     from scraper import Listing  # type: ignore[no-redef]
 
 LOGGER = logging.getLogger(__name__)
@@ -49,6 +51,9 @@ _TEXT_COLUMNS = (
     "heating",
     "floor",
     "fully_furnished",
+    "construction",
+    "condition",
+    "surroundings",
 )
 
 _NUMERIC_COLUMNS = (
@@ -65,7 +70,17 @@ _NUMERIC_COLUMNS = (
 
 _INTEGER_COLUMNS = ("floor_number", "floor_total")
 
-_ALL_COLUMNS = _TEXT_COLUMNS + _NUMERIC_COLUMNS + _INTEGER_COLUMNS + ("images", "pets_friendly")
+_BOOLEAN_COLUMNS = (
+    "pets_friendly",
+    "air_conditioning",
+    "has_washing_machine",
+    "has_dryer",
+    "has_internet",
+    "has_dishwasher",
+    "mansard",
+)
+
+_ALL_COLUMNS = _TEXT_COLUMNS + _NUMERIC_COLUMNS + _INTEGER_COLUMNS + ("images",) + _BOOLEAN_COLUMNS
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS listings (
@@ -92,10 +107,32 @@ CREATE TABLE IF NOT EXISTS listings (
     floor_number INTEGER,
     floor_total INTEGER,
     fully_furnished TEXT NOT NULL DEFAULT '',
+    construction TEXT NOT NULL DEFAULT '',
+    condition TEXT NOT NULL DEFAULT '',
+    surroundings TEXT NOT NULL DEFAULT '',
     pets_friendly BOOLEAN,
+    air_conditioning BOOLEAN,
+    has_washing_machine BOOLEAN,
+    has_dryer BOOLEAN,
+    has_internet BOOLEAN,
+    has_dishwasher BOOLEAN,
+    mansard BOOLEAN,
     first_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- listings existed before these columns were added; CREATE TABLE IF NOT EXISTS
+-- above is a no-op against an already-deployed table, so new columns need an
+-- explicit, idempotent ALTER here to reach a running database.
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS construction TEXT NOT NULL DEFAULT '';
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS condition TEXT NOT NULL DEFAULT '';
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS surroundings TEXT NOT NULL DEFAULT '';
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS air_conditioning BOOLEAN;
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS has_washing_machine BOOLEAN;
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS has_dryer BOOLEAN;
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS has_internet BOOLEAN;
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS has_dishwasher BOOLEAN;
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS mansard BOOLEAN;
 
 CREATE TABLE IF NOT EXISTS bot_users (
     telegram_user_id BIGINT PRIMARY KEY,
@@ -105,10 +142,22 @@ CREATE TABLE IF NOT EXISTS bot_users (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- One row per user, collected during onboarding; every column is nullable
+-- because every onboarding question is skippable, and a skip must mean "no
+-- preference" (score always neutral), not an assumed value.
+CREATE TABLE IF NOT EXISTS user_preferences (
+    telegram_user_id BIGINT PRIMARY KEY REFERENCES bot_users (telegram_user_id) ON DELETE CASCADE,
+    wants_pets BOOLEAN,
+    budget_total_price NUMERIC,
+    min_area_m2 NUMERIC,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS user_listing_relevance (
     telegram_user_id BIGINT NOT NULL REFERENCES bot_users (telegram_user_id) ON DELETE CASCADE,
     listing_id TEXT NOT NULL REFERENCES listings (listing_id) ON DELETE CASCADE,
     is_relevant BOOLEAN NOT NULL DEFAULT TRUE,
+    score INTEGER NOT NULL DEFAULT 0,
     notified_at TIMESTAMPTZ,
     first_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -116,6 +165,10 @@ CREATE TABLE IF NOT EXISTS user_listing_relevance (
 );
 CREATE INDEX IF NOT EXISTS user_listing_relevance_relevant_idx
     ON user_listing_relevance (telegram_user_id, is_relevant);
+
+-- user_listing_relevance existed before scoring — see the ALTER block above
+-- listings for why this needs an explicit, idempotent ALTER too.
+ALTER TABLE user_listing_relevance ADD COLUMN IF NOT EXISTS score INTEGER NOT NULL DEFAULT 0;
 """
 
 _LISTINGS_UPSERT_SQL = f"""
@@ -127,15 +180,16 @@ ON CONFLICT (listing_id) DO UPDATE SET
 """
 
 _RELEVANCE_UPSERT_SQL = """
-INSERT INTO user_listing_relevance (telegram_user_id, listing_id, is_relevant, last_seen_at)
-VALUES (%(telegram_user_id)s, %(listing_id)s, TRUE, now())
+INSERT INTO user_listing_relevance (telegram_user_id, listing_id, is_relevant, score, last_seen_at)
+VALUES (%(telegram_user_id)s, %(listing_id)s, TRUE, %(score)s, now())
 ON CONFLICT (telegram_user_id, listing_id) DO UPDATE SET
     is_relevant = TRUE,
+    score = EXCLUDED.score,
     last_seen_at = now()
 """
 
 _RELEVANT_JOIN_SQL = """
-SELECT l.* FROM listings l
+SELECT l.*, r.score FROM listings l
 JOIN user_listing_relevance r ON r.listing_id = l.listing_id
 WHERE r.telegram_user_id = %s AND r.is_relevant
 """
@@ -207,7 +261,8 @@ def row_from_listing(listing: Listing) -> dict:
     except json.JSONDecodeError:
         images = []
     row["images"] = Json(images)
-    row["pets_friendly"] = _bool_or_none(data["pets_friendly"])
+    for column in _BOOLEAN_COLUMNS:
+        row[column] = _bool_or_none(data[column])
     return row
 
 
@@ -234,6 +289,7 @@ def sync_user_listings(
     """
     ensure_bot_user(conn, telegram_user_id)
     rows = [row_from_listing(listing) for listing in listings]
+    preferences = get_user_preferences(conn, telegram_user_id)
     with conn.transaction():
         with conn.cursor() as cursor:
             for row in rows:
@@ -245,7 +301,11 @@ def sync_user_listings(
             for row in rows:
                 cursor.execute(
                     _RELEVANCE_UPSERT_SQL,
-                    {"telegram_user_id": telegram_user_id, "listing_id": row["listing_id"]},
+                    {
+                        "telegram_user_id": telegram_user_id,
+                        "listing_id": row["listing_id"],
+                        "score": compute_score(row, preferences),
+                    },
                 )
     LOGGER.info("Synced %d listings for user %s (now relevant)", len(rows), telegram_user_id)
     return {"synced": len(rows)}
@@ -266,7 +326,9 @@ def import_listings(conn: psycopg.Connection, listings: Iterable[Listing]) -> in
 
 def fetch_relevant_listings(conn: psycopg.Connection, telegram_user_id: int) -> list[dict]:
     with conn.cursor() as cursor:
-        cursor.execute(_RELEVANT_JOIN_SQL + " ORDER BY r.last_seen_at DESC", (telegram_user_id,))
+        cursor.execute(
+            _RELEVANT_JOIN_SQL + " ORDER BY r.score DESC, r.last_seen_at DESC", (telegram_user_id,)
+        )
         return cursor.fetchall()
 
 
@@ -285,10 +347,21 @@ def fetch_relevant_listings_page(
 ) -> list[dict]:
     with conn.cursor() as cursor:
         cursor.execute(
-            _RELEVANT_JOIN_SQL + " ORDER BY r.last_seen_at DESC, l.listing_id DESC OFFSET %s LIMIT %s",
+            _RELEVANT_JOIN_SQL
+            + " ORDER BY r.score DESC, r.last_seen_at DESC, l.listing_id DESC OFFSET %s LIMIT %s",
             (telegram_user_id, offset, limit),
         )
         return cursor.fetchall()
+
+
+def count_unnotified_relevant_listings(conn: psycopg.Connection, telegram_user_id: int) -> int:
+    with conn.cursor() as cursor:
+        cursor.execute(
+            "SELECT count(*) AS n FROM user_listing_relevance "
+            "WHERE telegram_user_id = %s AND is_relevant AND notified_at IS NULL",
+            (telegram_user_id,),
+        )
+        return cursor.fetchone()["n"]
 
 
 def fetch_unnotified_relevant_listings(conn: psycopg.Connection, telegram_user_id: int) -> list[dict]:
@@ -322,6 +395,19 @@ def fetch_listing(conn: psycopg.Connection, listing_id: str) -> dict | None:
         return cursor.fetchone()
 
 
+def get_relevance_score(conn: psycopg.Connection, telegram_user_id: int, listing_id: str) -> int:
+    """This user's score for this listing, or 0 if it isn't (or is no longer)
+    relevant to them — matches ``user_listing_relevance.score``'s own default.
+    """
+    with conn.cursor() as cursor:
+        cursor.execute(
+            "SELECT score FROM user_listing_relevance WHERE telegram_user_id = %s AND listing_id = %s",
+            (telegram_user_id, listing_id),
+        )
+        row = cursor.fetchone()
+        return row["score"] if row else 0
+
+
 DEFAULT_LANGUAGE = "en"
 
 
@@ -343,6 +429,39 @@ def set_user_language(conn: psycopg.Connection, telegram_user_id: int, language_
                 "UPDATE bot_users SET language_code = %s, updated_at = now() "
                 "WHERE telegram_user_id = %s",
                 (language_code, telegram_user_id),
+            )
+
+
+_PREFERENCE_COLUMNS = ("wants_pets", "budget_total_price", "min_area_m2")
+
+_NO_PREFERENCES = {"wants_pets": None, "budget_total_price": None, "min_area_m2": None}
+
+
+def get_user_preferences(conn: psycopg.Connection, telegram_user_id: int) -> dict:
+    with conn.cursor() as cursor:
+        cursor.execute(
+            "SELECT wants_pets, budget_total_price, min_area_m2 FROM user_preferences "
+            "WHERE telegram_user_id = %s",
+            (telegram_user_id,),
+        )
+        row = cursor.fetchone()
+        return row if row else dict(_NO_PREFERENCES)
+
+
+def set_user_preference(conn: psycopg.Connection, telegram_user_id: int, column: str, value) -> None:
+    """Upsert one column of ``user_preferences``. ``column`` must be one of
+    ``_PREFERENCE_COLUMNS`` — the onboarding flow is the only caller, so this is
+    never fed anything beyond that fixed, internally-controlled set.
+    """
+    if column not in _PREFERENCE_COLUMNS:
+        raise ValueError(f"Unknown preference column: {column}")
+    ensure_bot_user(conn, telegram_user_id)
+    with conn.transaction():
+        with conn.cursor() as cursor:
+            cursor.execute(
+                f"INSERT INTO user_preferences (telegram_user_id, {column}) VALUES (%s, %s) "
+                f"ON CONFLICT (telegram_user_id) DO UPDATE SET {column} = EXCLUDED.{column}, updated_at = now()",
+                (telegram_user_id, value),
             )
 
 

@@ -19,9 +19,11 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 try:
+    from .amenities import classify_amenities
     from .floor import parse_floor
     from .pets import classify_pets_friendly
 except ImportError:  # Support: python3 src/scraper.py
+    from amenities import classify_amenities  # type: ignore[no-redef]
     from floor import parse_floor  # type: ignore[no-redef]
     from pets import classify_pets_friendly  # type: ignore[no-redef]
 
@@ -57,7 +59,16 @@ class Listing:
     floor_number: str = ""
     floor_total: str = ""
     fully_furnished: str = ""
+    construction: str = ""
+    condition: str = ""
+    surroundings: str = ""
     pets_friendly: str = ""
+    air_conditioning: str = ""
+    has_washing_machine: str = ""
+    has_dryer: str = ""
+    has_internet: str = ""
+    has_dishwasher: str = ""
+    mansard: str = ""
 
 
 CSV_FIELDS = list(Listing.__dataclass_fields__)
@@ -332,6 +343,17 @@ def extract_coordinates(advert: dict) -> tuple[str, str]:
     return format_number(latitude), format_number(longitude)
 
 
+def extract_pets_friendly(advert: dict, description: str) -> str:
+    """Prefer the site's own structured ``petFriendly`` field when it's set;
+    most listings leave it unset (``null``), so fuzzy-classifying the
+    description is still the fallback, not the primary source.
+    """
+    structured = advert.get("petFriendly")
+    if isinstance(structured, bool):
+        return "True" if structured else "False"
+    return classify_pets_friendly(description)
+
+
 def parse_listing(content: str, listing_url: str) -> Listing:
     """Parse one publication detail page into a normalized CSV row."""
     soup = BeautifulSoup(content, "html.parser")
@@ -360,6 +382,7 @@ def parse_listing(content: str, listing_url: str) -> Listing:
     floor_raw = table.get("floor", "")
     floor_number, floor_total = parse_floor(floor_raw)
     description = extract_description(soup)
+    amenities = classify_amenities(description)
     return Listing(
         listing_id=listing_id,
         name=name,
@@ -384,7 +407,16 @@ def parse_listing(content: str, listing_url: str) -> Listing:
         floor_number=floor_number,
         floor_total=floor_total,
         fully_furnished=table.get("fully furnished", ""),
-        pets_friendly=classify_pets_friendly(description),
+        construction=table.get("building construction", ""),
+        condition=table.get("condition", ""),
+        surroundings=table.get("location", ""),
+        pets_friendly=extract_pets_friendly(advert, description),
+        air_conditioning=amenities["air_conditioning"],
+        has_washing_machine=amenities["has_washing_machine"],
+        has_dryer=amenities["has_dryer"],
+        has_internet=amenities["has_internet"],
+        has_dishwasher=amenities["has_dishwasher"],
+        mansard=amenities["mansard"],
     )
 
 

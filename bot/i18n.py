@@ -30,6 +30,71 @@ _CHARTS_BUTTON = {
     "uk": "📊 Графіки",
 }
 
+# Emoji is the actual color-coding here — Telegram's HTML/MarkdownV2 parse modes
+# have no colored-text feature, so a distinct emoji per amenity is the only
+# per-tag visual distinction the message text can actually carry.
+_AMENITY_EMOJI = {
+    "air_conditioning": "❄️",
+    "has_washing_machine": "🧺",
+    "has_dryer": "🌀",
+    "has_internet": "📶",
+    "has_dishwasher": "🍽",
+    "mansard": "🔺",
+}
+
+_AMENITY_LABELS = {
+    "air_conditioning": {
+        "en": "AC",
+        "cs": "Klimatizace",
+        "ru": "Кондиционер",
+        "uk": "Кондиціонер",
+    },
+    "has_washing_machine": {
+        "en": "Washer",
+        "cs": "Pračka",
+        "ru": "Стиральная машина",
+        "uk": "Пральна машина",
+    },
+    "has_dryer": {
+        "en": "Dryer",
+        "cs": "Sušička",
+        "ru": "Сушильная машина",
+        "uk": "Сушильна машина",
+    },
+    "has_internet": {
+        "en": "Internet",
+        "cs": "Internet",
+        "ru": "Интернет",
+        "uk": "Інтернет",
+    },
+    "has_dishwasher": {
+        "en": "Dishwasher",
+        "cs": "Myčka",
+        "ru": "Посудомоечная машина",
+        "uk": "Посудомийна машина",
+    },
+    "mansard": {
+        "en": "Attic/mansard",
+        "cs": "Podkroví",
+        "ru": "Мансарда",
+        "uk": "Мансарда",
+    },
+}
+
+
+def amenity_tags(language: str, row: dict) -> list[str]:
+    """Emoji+label tags for every amenity confirmed present (``True``) on ``row``.
+
+    Amenities that are absent or unknown are left out entirely, the same way a
+    listing's own feature list only ever mentions what's there.
+    """
+    tags = []
+    for field, emoji in _AMENITY_EMOJI.items():
+        if row.get(field) is True:
+            labels = _AMENITY_LABELS[field]
+            tags.append(f"{emoji} {labels.get(language, labels[_DEFAULT_LANGUAGE])}")
+    return tags
+
 
 def batch_summary_text(language: str, count: int) -> str:
     template = _BATCH_SUMMARY.get(language, _BATCH_SUMMARY[_DEFAULT_LANGUAGE])

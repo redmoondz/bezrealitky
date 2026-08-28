@@ -62,12 +62,27 @@ def _current_search_url(telegram_user_id: int) -> str:
         return db.get_or_seed_user_search(conn, telegram_user_id, base_config["search"]["url"])
 
 
+def _new_match_count(telegram_user_id: int) -> int:
+    with db.connect() as conn:
+        db.ensure_schema(conn)
+        return db.count_unnotified_relevant_listings(conn, telegram_user_id)
+
+
+def _sync_summary(listings: list, failures: list, new_count: int) -> str:
+    new_note = f"{new_count} new" if new_count else "no new matches"
+    text = f"Synced {len(listings)} listings ({new_note})."
+    if failures:
+        text += f" {len(failures)} publication(s) failed to parse."
+    return text
+
+
 def _run_saved_search(telegram_user_id: int):
     base_config = load_config()
     with db.connect() as conn:
         db.ensure_schema(conn)
         search_url = db.get_or_seed_user_search(conn, telegram_user_id, base_config["search"]["url"])
-    return run_once_for_user(telegram_user_id, search_url, base_config)
+    listings, failures = run_once_for_user(telegram_user_id, search_url, base_config)
+    return listings, failures, _new_match_count(telegram_user_id)
 
 
 def _apply_flags_and_run(telegram_user_id: int, args):
@@ -88,7 +103,7 @@ def _apply_flags_and_run(telegram_user_id: int, args):
     with db.connect() as conn:
         db.set_user_search(conn, telegram_user_id, new_url)
     listings, failures = run_once_for_user(telegram_user_id, new_url, base_config)
-    return new_url, listings, failures
+    return new_url, listings, failures, _new_match_count(telegram_user_id)
 
 
 @router.message(Command("parse_help"))
@@ -111,14 +126,11 @@ async def search_denied(message: Message) -> None:
 async def parse(message: Message) -> None:
     await message.answer("Running the scraper with your saved search…")
     try:
-        listings, failures = await asyncio.to_thread(_run_saved_search, message.from_user.id)
+        listings, failures, new_count = await asyncio.to_thread(_run_saved_search, message.from_user.id)
     except (ConfigurationError, OSError) as exc:
         await message.answer(f"Scrape failed: {exc}")
         return
-    text = f"Synced {len(listings)} listings."
-    if failures:
-        text += f" {len(failures)} publication(s) failed to parse."
-    await message.answer(text)
+    await message.answer(_sync_summary(listings, failures, new_count))
 
 
 @router.message(Command("parse"))
@@ -140,15 +152,13 @@ async def parse_custom(message: Message) -> None:
         return
     await message.answer("Updating your saved search and running the scraper…")
     try:
-        new_url, listings, failures = await asyncio.to_thread(
+        new_url, listings, failures, new_count = await asyncio.to_thread(
             _apply_flags_and_run, message.from_user.id, args
         )
     except (ConfigurationError, OSError) as exc:
         await message.answer(f"Scrape failed: {exc}")
         return
-    text = f"Saved search updated:\n{new_url}\n\nSynced {len(listings)} listings."
-    if failures:
-        text += f" {len(failures)} publication(s) failed to parse."
+    text = f"Saved search updated:\n{new_url}\n\n" + _sync_summary(listings, failures, new_count)
     await message.answer(text)
 
 

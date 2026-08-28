@@ -17,16 +17,25 @@ from aiogram.types import BotCommand, CallbackQuery, Message
 from src import db
 from src.configuration import ConfigurationError, load_config, validate_search_url
 from src.scheduler import run_once_for_user
+from src.scraper import parse_number
 
 from .. import config, notify_loop
 from ..access import IsAllowed, denial_text
-from ..keyboards import language_keyboard, onboarding_keyboard
+from ..keyboards import (
+    language_keyboard,
+    onboarding_keyboard,
+    pets_preference_keyboard,
+    skip_keyboard,
+)
 
 router = Router(name="start")
 
 
 class Onboarding(StatesGroup):
     waiting_for_url = State()
+    waiting_for_pets = State()
+    waiting_for_budget = State()
+    waiting_for_area = State()
 
 
 ONBOARDING_PROMPT = (
@@ -39,6 +48,20 @@ ONBOARDING_PROMPT = (
     "Or tap the button below to start with the project's default search instead — "
     "you can always change it later with /parse_custom."
 )
+
+PETS_PROMPT = "🐾 Do you have — or want — a place that's pet-friendly?"
+
+BUDGET_PROMPT = (
+    "💰 What's your monthly budget, <b>all costs included</b> (rent + service + "
+    "utility charges)? Send a plain number (e.g. 25000), or tap Skip.\n\n"
+    "This only affects how listings are ranked for you — it won't hide anything."
+)
+
+AREA_PROMPT = (
+    "📐 Any minimum size you need, in m²? Send a plain number (e.g. 40), or tap Skip."
+)
+
+_NUMBER_RETRY = "That doesn't look like a plain number. Please try again, or tap Skip."
 
 ONBOARDING_RUNNING = "Saving your search and running the scraper now…"
 
@@ -101,6 +124,46 @@ def _save_and_run(telegram_user_id: int, search_url: str):
     return run_once_for_user(telegram_user_id, search_url, base_config)
 
 
+def _save_preference(telegram_user_id: int, column: str, value) -> None:
+    with db.connect() as conn:
+        db.ensure_schema(conn)
+        db.set_user_preference(conn, telegram_user_id, column, value)
+
+
+def _parse_preference_number(text: str):
+    """A positive number for the budget/area onboarding questions, or ``None``
+    if ``text`` isn't one — reuses the scraper's own tolerant number parser
+    (handles "25 000", "25,000", decimals, ...) rather than a bespoke regex.
+    """
+    value = parse_number(text)
+    if value is None or value <= 0:
+        return None
+    return value
+
+
+async def _ask_pets(message: Message, state: FSMContext, search_url: str) -> None:
+    await state.update_data(search_url=search_url)
+    await state.set_state(Onboarding.waiting_for_pets)
+    await message.answer(PETS_PROMPT, reply_markup=pets_preference_keyboard())
+
+
+async def _ask_budget(message: Message, state: FSMContext) -> None:
+    await state.set_state(Onboarding.waiting_for_budget)
+    await message.answer(BUDGET_PROMPT, reply_markup=skip_keyboard("budget_pref:skip"))
+
+
+async def _ask_area(message: Message, state: FSMContext) -> None:
+    await state.set_state(Onboarding.waiting_for_area)
+    await message.answer(AREA_PROMPT, reply_markup=skip_keyboard("area_pref:skip"))
+
+
+async def _finish_onboarding_from_state(message: Message, telegram_user_id: int, state: FSMContext) -> None:
+    data = await state.get_data()
+    search_url = data.get("search_url", "")
+    await state.clear()
+    await _finish_onboarding(message, telegram_user_id, search_url)
+
+
 async def _finish_onboarding(message: Message, telegram_user_id: int, search_url: str) -> None:
     await message.answer(ONBOARDING_RUNNING)
     try:
@@ -148,8 +211,7 @@ async def onboarding_receive_url(message: Message, state: FSMContext) -> None:
             reply_markup=onboarding_keyboard(),
         )
         return
-    await state.clear()
-    await _finish_onboarding(message, message.from_user.id, search_url)
+    await _ask_pets(message, state, search_url)
 
 
 @router.message(Onboarding.waiting_for_url, F.text, ~F.text.startswith("/"))
@@ -160,17 +222,61 @@ async def onboarding_receive_url_denied(message: Message, state: FSMContext) -> 
 
 @router.callback_query(F.data == "onboarding:skip", IsAllowed())
 async def onboarding_skip(query: CallbackQuery, state: FSMContext) -> None:
-    await state.clear()
     await query.answer()
     if query.message:
         search_url = await asyncio.to_thread(_default_search_url)
-        await _finish_onboarding(query.message, query.from_user.id, search_url)
+        await _ask_pets(query.message, state, search_url)
 
 
 @router.callback_query(F.data == "onboarding:skip")
 async def onboarding_skip_denied(query: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     await query.answer(denial_text(), show_alert=True)
+
+
+@router.callback_query(Onboarding.waiting_for_pets, F.data.startswith("pets_pref:"))
+async def onboarding_pets_answered(query: CallbackQuery, state: FSMContext) -> None:
+    answer = query.data.split(":", 1)[1]
+    wants_pets = {"yes": True, "no": False, "skip": None}.get(answer)
+    await query.answer()
+    if answer != "skip":
+        await asyncio.to_thread(_save_preference, query.from_user.id, "wants_pets", wants_pets)
+    if query.message:
+        await _ask_budget(query.message, state)
+
+
+@router.message(Onboarding.waiting_for_budget, F.text, ~F.text.startswith("/"))
+async def onboarding_budget_answered(message: Message, state: FSMContext) -> None:
+    value = _parse_preference_number(message.text)
+    if value is None:
+        await message.answer(_NUMBER_RETRY, reply_markup=skip_keyboard("budget_pref:skip"))
+        return
+    await asyncio.to_thread(_save_preference, message.from_user.id, "budget_total_price", value)
+    await _ask_area(message, state)
+
+
+@router.callback_query(Onboarding.waiting_for_budget, F.data == "budget_pref:skip")
+async def onboarding_budget_skipped(query: CallbackQuery, state: FSMContext) -> None:
+    await query.answer()
+    if query.message:
+        await _ask_area(query.message, state)
+
+
+@router.message(Onboarding.waiting_for_area, F.text, ~F.text.startswith("/"))
+async def onboarding_area_answered(message: Message, state: FSMContext) -> None:
+    value = _parse_preference_number(message.text)
+    if value is None:
+        await message.answer(_NUMBER_RETRY, reply_markup=skip_keyboard("area_pref:skip"))
+        return
+    await asyncio.to_thread(_save_preference, message.from_user.id, "min_area_m2", value)
+    await _finish_onboarding_from_state(message, message.from_user.id, state)
+
+
+@router.callback_query(Onboarding.waiting_for_area, F.data == "area_pref:skip")
+async def onboarding_area_skipped(query: CallbackQuery, state: FSMContext) -> None:
+    await query.answer()
+    if query.message:
+        await _finish_onboarding_from_state(query.message, query.from_user.id, state)
 
 
 @router.message(Command("language"))
