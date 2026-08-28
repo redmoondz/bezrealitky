@@ -87,7 +87,7 @@ _BOOLEAN_COLUMNS = (
     "english_speaking",
 )
 
-_ALL_COLUMNS = _TEXT_COLUMNS + _NUMERIC_COLUMNS + _INTEGER_COLUMNS + ("images",) + _BOOLEAN_COLUMNS
+_ALL_COLUMNS = _TEXT_COLUMNS + _NUMERIC_COLUMNS + _INTEGER_COLUMNS + ("images", "tags") + _BOOLEAN_COLUMNS
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS listings (
@@ -131,6 +131,10 @@ CREATE TABLE IF NOT EXISTS listings (
     quiet_surroundings BOOLEAN,
     garage BOOLEAN,
     english_speaking BOOLEAN,
+    -- Every _BOOLEAN_COLUMNS entry that's True, by name — one place analytics
+    -- can query tag frequency/combinations without scanning 13 columns, e.g.
+    -- SELECT jsonb_array_elements_text(tags), count(*) FROM listings GROUP BY 1.
+    tags JSONB NOT NULL DEFAULT '[]',
     first_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -154,6 +158,23 @@ ALTER TABLE listings ADD COLUMN IF NOT EXISTS refrigerator BOOLEAN;
 ALTER TABLE listings ADD COLUMN IF NOT EXISTS quiet_surroundings BOOLEAN;
 ALTER TABLE listings ADD COLUMN IF NOT EXISTS garage BOOLEAN;
 ALTER TABLE listings ADD COLUMN IF NOT EXISTS english_speaking BOOLEAN;
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]';
+
+-- Every Telegram account that has ever messaged the bot (recorded by a
+-- dispatcher-wide middleware on first contact) — independent of ``bot_users``,
+-- which only tracks people who've actually engaged with the bot's own
+-- features (a saved search, a language choice). This is Telegram's own
+-- profile info, not anything the person configures in the bot.
+CREATE TABLE IF NOT EXISTS users (
+    telegram_user_id BIGINT PRIMARY KEY,
+    first_name TEXT NOT NULL DEFAULT '',
+    last_name TEXT NOT NULL DEFAULT '',
+    username TEXT NOT NULL DEFAULT '',
+    telegram_language_code TEXT NOT NULL DEFAULT '',
+    is_premium BOOLEAN NOT NULL DEFAULT FALSE,
+    first_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 
 CREATE TABLE IF NOT EXISTS bot_users (
     telegram_user_id BIGINT PRIMARY KEY,
@@ -284,7 +305,40 @@ def row_from_listing(listing: Listing) -> dict:
     row["images"] = Json(images)
     for column in _BOOLEAN_COLUMNS:
         row[column] = _bool_or_none(data[column])
+    row["tags"] = Json([column for column in _BOOLEAN_COLUMNS if row[column] is True])
     return row
+
+
+def upsert_telegram_user(
+    conn: psycopg.Connection,
+    telegram_user_id: int,
+    first_name: str,
+    last_name: str,
+    username: str,
+    telegram_language_code: str,
+    is_premium: bool,
+) -> None:
+    """Record (or refresh) one Telegram account's profile snapshot — called by
+    the bot's tracking middleware on every incoming message/callback, so a
+    name or username change is picked up too, not just the first contact.
+    """
+    with conn.transaction():
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO users (telegram_user_id, first_name, last_name, username,
+                    telegram_language_code, is_premium)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (telegram_user_id) DO UPDATE SET
+                    first_name = EXCLUDED.first_name,
+                    last_name = EXCLUDED.last_name,
+                    username = EXCLUDED.username,
+                    telegram_language_code = EXCLUDED.telegram_language_code,
+                    is_premium = EXCLUDED.is_premium,
+                    last_seen_at = now()
+                """,
+                (telegram_user_id, first_name, last_name, username, telegram_language_code, is_premium),
+            )
 
 
 def ensure_bot_user(conn: psycopg.Connection, telegram_user_id: int) -> None:

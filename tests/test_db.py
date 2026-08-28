@@ -70,6 +70,23 @@ class RowFromListingTests(TestCase):
         self.assertIs(row["garage"], False)
         self.assertIs(row["english_speaking"], True)
 
+    def test_tags_lists_only_the_true_boolean_columns(self):
+        listing = Listing(
+            listing_id="1",
+            pets_friendly="True",
+            air_conditioning="False",
+            has_washing_machine="",
+            balcony="True",
+            garage="True",
+        )
+        row = db.row_from_listing(listing)
+        self.assertEqual(row["tags"].obj, ["pets_friendly", "balcony", "garage"])
+
+    def test_tags_is_empty_list_when_nothing_is_true(self):
+        listing = Listing(listing_id="1")
+        row = db.row_from_listing(listing)
+        self.assertEqual(row["tags"].obj, [])
+
     def test_blank_optional_fields_become_none(self):
         listing = Listing(listing_id="1", images="[]")
         row = db.row_from_listing(listing)

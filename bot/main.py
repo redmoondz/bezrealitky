@@ -10,12 +10,16 @@ from aiogram import Bot, Dispatcher
 from . import config, notify_loop
 from .handlers import browse, charts, parser, start
 from .handlers.start import BOT_COMMANDS
+from .middlewares import UserTrackingMiddleware
 
 LOGGER = logging.getLogger(__name__)
 
 
 def build_dispatcher() -> Dispatcher:
     dispatcher = Dispatcher()
+    tracker = UserTrackingMiddleware()
+    dispatcher.message.outer_middleware(tracker)
+    dispatcher.callback_query.outer_middleware(tracker)
     dispatcher.include_router(start.router)
     dispatcher.include_router(browse.router)
     dispatcher.include_router(parser.router)
