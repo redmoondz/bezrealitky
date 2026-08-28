@@ -691,3 +691,51 @@ def list_registered_users(conn: psycopg.Connection) -> list[int]:
     with conn.cursor() as cursor:
         cursor.execute("SELECT telegram_user_id FROM bot_users WHERE search_url IS NOT NULL")
         return [row["telegram_user_id"] for row in cursor.fetchall()]
+
+
+def admin_stats(conn: psycopg.Connection) -> dict:
+    """Coarse counts for the Mini App's admin overview: how many Telegram
+    accounts have ever messaged the bot, how many have picked a language,
+    how many have an active saved search, and how many listings are cached.
+    """
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT count(*) AS n FROM users")
+        tracked_users = cursor.fetchone()["n"]
+        cursor.execute("SELECT count(*) AS n FROM bot_users")
+        onboarded_users = cursor.fetchone()["n"]
+        cursor.execute("SELECT count(*) AS n FROM bot_users WHERE search_url IS NOT NULL")
+        registered_users = cursor.fetchone()["n"]
+        cursor.execute("SELECT count(*) AS n FROM listings")
+        total_listings = cursor.fetchone()["n"]
+    return {
+        "tracked_users": tracked_users,
+        "onboarded_users": onboarded_users,
+        "registered_users": registered_users,
+        "total_listings": total_listings,
+    }
+
+
+_ADMIN_USERS_SQL = """
+SELECT
+    u.telegram_user_id,
+    u.first_name,
+    u.last_name,
+    u.username,
+    u.last_seen_at,
+    bu.language_code,
+    (bu.search_url IS NOT NULL) AS has_search,
+    bu.created_at AS onboarded_at
+FROM users u
+LEFT JOIN bot_users bu ON bu.telegram_user_id = u.telegram_user_id
+ORDER BY u.last_seen_at DESC
+LIMIT 500
+"""
+
+
+def admin_list_users(conn: psycopg.Connection) -> list[dict]:
+    """Every Telegram account the bot has ever seen, most-recently-active
+    first, capped at 500 — a basic admin overview, not a paginated export.
+    """
+    with conn.cursor() as cursor:
+        cursor.execute(_ADMIN_USERS_SQL)
+        return cursor.fetchall()

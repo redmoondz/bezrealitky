@@ -8,10 +8,13 @@ const TABS = [
   { to: '/help', icon: 'ℹ️', label: 'Help' },
 ]
 
-export default function TabBar() {
+const ADMIN_TAB = { to: '/admin', icon: '🛠', label: 'Admin' }
+
+export default function TabBar({ isAdmin = false }: { isAdmin?: boolean }) {
+  const tabs = isAdmin ? [...TABS, ADMIN_TAB] : TABS
   return (
     <nav className="tab-bar">
-      {TABS.map((tab) => (
+      {tabs.map((tab) => (
         <NavLink
           key={tab.to}
           to={tab.to}

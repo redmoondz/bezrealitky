@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+from typing import Literal
+
 from pydantic import BaseModel
 
 
@@ -18,6 +21,7 @@ class MeResponse(BaseModel):
     id: int
     language: str
     has_search: bool
+    is_admin: bool = False
 
 
 class LanguageOption(BaseModel):
@@ -118,3 +122,32 @@ class ChartDataResponse(BaseModel):
 
 class HelpResponse(BaseModel):
     text: str
+
+
+class AdminStats(BaseModel):
+    tracked_users: int
+    onboarded_users: int
+    registered_users: int
+    total_listings: int
+
+
+class AdminUser(BaseModel):
+    telegram_user_id: int
+    first_name: str = ""
+    last_name: str = ""
+    username: str = ""
+    last_seen_at: datetime
+    language_code: str | None = None
+    has_search: bool = False
+    onboarded_at: datetime | None = None
+
+
+class AdminNotifyRequest(BaseModel):
+    scope: Literal["all", "user"]
+    user_id: int | None = None
+    text: str
+
+
+class AdminNotifyResponse(BaseModel):
+    sent: int
+    failed: int

@@ -12,9 +12,11 @@ import SearchSettings from './screens/SearchSettings'
 import { isInsideTelegram } from './telegram'
 
 // Code-split: recharts (Charts) and leaflet (ListingDetail) are the two
-// heaviest dependencies, and most sessions never open either.
+// heaviest dependencies, and most sessions never open either. Admin is
+// code-split too since only admins ever fetch it.
 const Charts = lazy(() => import('./screens/Charts'))
 const ListingDetail = lazy(() => import('./screens/ListingDetail'))
+const Admin = lazy(() => import('./screens/Admin'))
 
 function CenteredMessage({ title, text }: { title?: string; text: string }) {
   return (
@@ -54,6 +56,7 @@ export default function App() {
   }
 
   const hasSearch = me.data.has_search
+  const isAdmin = me.data.is_admin
 
   return (
     <div className="app-shell">
@@ -68,11 +71,12 @@ export default function App() {
             <Route path="/search" element={<SearchSettings />} />
             <Route path="/charts" element={<Charts />} />
             <Route path="/help" element={<Help />} />
+            {isAdmin && <Route path="/admin" element={<Admin />} />}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
       </main>
-      {hasSearch && <TabBar />}
+      {hasSearch && <TabBar isAdmin={isAdmin} />}
     </div>
   )
 }

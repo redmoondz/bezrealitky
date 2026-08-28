@@ -4,6 +4,7 @@ export interface MeResponse {
   id: number
   language: string
   has_search: boolean
+  is_admin: boolean
 }
 
 export interface LanguageOption {
@@ -101,4 +102,35 @@ export interface PreferencesPayload {
   wants_pets?: boolean
   budget_total_price?: number
   min_area_m2?: number
+}
+
+export interface AdminStats {
+  tracked_users: number
+  onboarded_users: number
+  registered_users: number
+  total_listings: number
+}
+
+export interface AdminUser {
+  telegram_user_id: number
+  first_name: string
+  last_name: string
+  username: string
+  last_seen_at: string
+  language_code: string | null
+  has_search: boolean
+  onboarded_at: string | null
+}
+
+export type AdminNotifyScope = 'all' | 'user'
+
+export interface AdminNotifyPayload {
+  scope: AdminNotifyScope
+  user_id?: number
+  text: string
+}
+
+export interface AdminNotifyResult {
+  sent: number
+  failed: number
 }

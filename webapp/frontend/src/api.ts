@@ -1,5 +1,9 @@
 import { getInitData } from './telegram'
 import type {
+  AdminNotifyPayload,
+  AdminNotifyResult,
+  AdminStats,
+  AdminUser,
   ChartDataResponse,
   ChartOption,
   HelpResponse,
@@ -75,4 +79,8 @@ export const api = {
 
   charts: () => get<ChartOption[]>('/charts'),
   chartData: (key: string) => get<ChartDataResponse>(`/charts/${key}/data`),
+
+  adminStats: () => get<AdminStats>('/admin/stats'),
+  adminUsers: () => get<AdminUser[]>('/admin/users'),
+  adminNotify: (payload: AdminNotifyPayload) => post<AdminNotifyResult>('/admin/notify', payload),
 }

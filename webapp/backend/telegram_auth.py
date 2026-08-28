@@ -16,7 +16,7 @@ import json
 import time
 from urllib.parse import parse_qsl
 
-from fastapi import Header, HTTPException
+from fastapi import Depends, Header, HTTPException
 
 from bot import config as bot_config
 
@@ -83,4 +83,15 @@ async def get_current_telegram_user(
     )
     if user.id not in bot_config.ALLOWED_USER_IDS:
         raise HTTPException(status_code=403, detail=_denial_text())
+    return user
+
+
+async def get_current_admin_user(
+    user: TelegramUser = Depends(get_current_telegram_user),
+) -> TelegramUser:
+    """Narrower than :func:`get_current_telegram_user` — requires the caller's
+    ID to also be in ``TELEGRAM_ADMIN_USER_IDS``, for the Mini App's Admin tab.
+    """
+    if user.id not in bot_config.ADMIN_USER_IDS:
+        raise HTTPException(status_code=403, detail="Admin access required.")
     return user

@@ -10,7 +10,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from .routers import charts, listings, meta, onboarding, search
+from .routers import admin, charts, listings, meta, onboarding, search
 
 FRONTEND_DIST = Path(__file__).resolve().parents[1] / "frontend" / "dist"
 
@@ -22,6 +22,7 @@ def create_app() -> FastAPI:
     app.include_router(listings.router, prefix="/api")
     app.include_router(search.router, prefix="/api")
     app.include_router(charts.router, prefix="/api")
+    app.include_router(admin.router, prefix="/api")
     # Absent in local dev before `npm run build` has produced webapp/frontend/dist —
     # the API still works standalone (e.g. via curl) without it.
     if FRONTEND_DIST.is_dir():

@@ -32,7 +32,12 @@ HELP_TEXT = (
 async def me(user: TelegramUser = Depends(get_current_telegram_user)) -> MeResponse:
     language = await run_db(db.get_user_language, user.id)
     search_url = await run_db(db.get_user_search, user.id)
-    return MeResponse(id=user.id, language=language, has_search=search_url is not None)
+    return MeResponse(
+        id=user.id,
+        language=language,
+        has_search=search_url is not None,
+        is_admin=user.id in bot_config.ADMIN_USER_IDS,
+    )
 
 
 @router.get("/languages", response_model=list[LanguageOption])

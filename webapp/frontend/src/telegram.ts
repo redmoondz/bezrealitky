@@ -96,6 +96,15 @@ export function hapticImpact(style: 'light' | 'medium' | 'heavy' = 'light'): voi
  * the system browser instead of being trapped in the Mini App's webview, or a
  * plain new tab when running outside Telegram.
  */
+/** Native confirm dialog when inside Telegram, `window.confirm` otherwise. */
+export function confirmAction(message: string): Promise<boolean> {
+  const app = webApp()
+  if (app && isInsideTelegram()) {
+    return new Promise((resolve) => app.showConfirm(message, resolve))
+  }
+  return Promise.resolve(window.confirm(message))
+}
+
 export function openExternalLink(url: string): void {
   const app = webApp()
   if (app && isInsideTelegram()) {

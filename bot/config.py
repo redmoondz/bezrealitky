@@ -47,3 +47,7 @@ def _parse_id_list(value: str) -> set[int]:
 
 
 ALLOWED_USER_IDS = _parse_id_list(os.environ.get("TELEGRAM_ALLOWED_USER_IDS", ""))
+
+# Subset of ALLOWED_USER_IDS that additionally sees the Mini App's Admin tab
+# (stats, user list, manual notifications) — see webapp/backend/routers/admin.py.
+ADMIN_USER_IDS = _parse_id_list(os.environ.get("TELEGRAM_ADMIN_USER_IDS", ""))
