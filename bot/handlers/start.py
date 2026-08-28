@@ -114,7 +114,8 @@ HELP_TEXT = (
     "Everyone has their own independent saved search — /parse_custom only ever "
     "changes yours. First time, it starts from the project's default (broad) search.\n\n"
     "Everything except language selection requires your Telegram user ID to be "
-    "in the server's TELEGRAM_ALLOWED_USER_IDS."
+    "in the server's TELEGRAM_ALLOWED_USER_IDS.\n\n"
+    "💬 Questions or feedback? Write to redmoo.rsv@gmail.com anytime."
 )
 
 
