@@ -95,6 +95,7 @@ BOT_COMMANDS = [
     BotCommand(command="language", description="Choose the translation language"),
     BotCommand(command="list", description="Browse listings matching your saved search"),
     BotCommand(command="view", description="Full details for one listing (needs an ID)"),
+    BotCommand(command="liked", description="Browse the listings you've liked"),
     BotCommand(command="parse", description="Run the scraper now with your saved search"),
     BotCommand(command="parse_custom", description="Update your saved search and run it"),
     BotCommand(command="parse_help", description="Show the flags /parse_custom accepts"),
@@ -105,8 +106,9 @@ BOT_COMMANDS = [
 HELP_TEXT = (
     "<b>Bezrealitky listings bot</b>\n\n"
     "🌐 /start, /language — choose the language listing descriptions are translated into\n"
-    "📋 /list — browse listings matching your saved search\n"
+    "📋 /list — browse listings matching your saved search (❤️ Like / 👎 Pass on each)\n"
     "🔎 /view &lt;listing_id&gt; — full details and photos for one listing\n"
+    "❤️ /liked — browse the listings you've liked\n"
     "🔄 /parse — run the scraper now with your saved search\n"
     "⚙️ /parse_custom — update your saved search with flags and run it (see /parse_help)\n"
     "🔍 /search — show your current saved search\n"

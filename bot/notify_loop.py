@@ -64,6 +64,10 @@ async def _notify_one(bot: Bot, telegram_user_id: int, row: dict, language: str)
         if images:
             await bot.send_photo(telegram_user_id, images[0])
         await bot.send_message(telegram_user_id, text, parse_mode="HTML")
+        latitude, longitude = row.get("latitude"), row.get("longitude")
+        if latitude is not None and longitude is not None:
+            # Same native Telegram map bubble /view sends — see its comment.
+            await bot.send_location(telegram_user_id, float(latitude), float(longitude))
     except Exception:  # noqa: BLE001 - one bad send must not stop the others
         LOGGER.exception(
             "Failed to notify user %s about listing %s", telegram_user_id, row["listing_id"]

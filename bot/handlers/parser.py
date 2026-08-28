@@ -28,6 +28,7 @@ from src.configuration import ConfigurationError, apply_updates, load_config
 from src.scheduler import run_once_for_user, user_config
 
 from ..access import IsAllowed, denial_text
+from ..keyboards import batch_summary_keyboard
 
 router = Router(name="parser")
 
@@ -62,10 +63,12 @@ def _current_search_url(telegram_user_id: int) -> str:
         return db.get_or_seed_user_search(conn, telegram_user_id, base_config["search"]["url"])
 
 
-def _new_match_count(telegram_user_id: int) -> int:
+def _new_match_count_and_language(telegram_user_id: int) -> tuple[int, str]:
     with db.connect() as conn:
         db.ensure_schema(conn)
-        return db.count_unnotified_relevant_listings(conn, telegram_user_id)
+        new_count = db.count_unnotified_relevant_listings(conn, telegram_user_id)
+        language = db.get_user_language(conn, telegram_user_id)
+        return new_count, language
 
 
 def _sync_summary(listings: list, failures: list, new_count: int) -> str:
@@ -82,7 +85,8 @@ def _run_saved_search(telegram_user_id: int):
         db.ensure_schema(conn)
         search_url = db.get_or_seed_user_search(conn, telegram_user_id, base_config["search"]["url"])
     listings, failures = run_once_for_user(telegram_user_id, search_url, base_config)
-    return listings, failures, _new_match_count(telegram_user_id)
+    new_count, language = _new_match_count_and_language(telegram_user_id)
+    return listings, failures, new_count, language
 
 
 def _apply_flags_and_run(telegram_user_id: int, args):
@@ -103,7 +107,8 @@ def _apply_flags_and_run(telegram_user_id: int, args):
     with db.connect() as conn:
         db.set_user_search(conn, telegram_user_id, new_url)
     listings, failures = run_once_for_user(telegram_user_id, new_url, base_config)
-    return new_url, listings, failures, _new_match_count(telegram_user_id)
+    new_count, language = _new_match_count_and_language(telegram_user_id)
+    return new_url, listings, failures, new_count, language
 
 
 @router.message(Command("parse_help"))
@@ -126,11 +131,14 @@ async def search_denied(message: Message) -> None:
 async def parse(message: Message) -> None:
     await message.answer("Running the scraper with your saved search…")
     try:
-        listings, failures, new_count = await asyncio.to_thread(_run_saved_search, message.from_user.id)
+        listings, failures, new_count, language = await asyncio.to_thread(
+            _run_saved_search, message.from_user.id
+        )
     except (ConfigurationError, OSError) as exc:
         await message.answer(f"Scrape failed: {exc}")
         return
-    await message.answer(_sync_summary(listings, failures, new_count))
+    keyboard = batch_summary_keyboard(language) if new_count else None
+    await message.answer(_sync_summary(listings, failures, new_count), reply_markup=keyboard)
 
 
 @router.message(Command("parse"))
@@ -152,14 +160,15 @@ async def parse_custom(message: Message) -> None:
         return
     await message.answer("Updating your saved search and running the scraper…")
     try:
-        new_url, listings, failures, new_count = await asyncio.to_thread(
+        new_url, listings, failures, new_count, language = await asyncio.to_thread(
             _apply_flags_and_run, message.from_user.id, args
         )
     except (ConfigurationError, OSError) as exc:
         await message.answer(f"Scrape failed: {exc}")
         return
     text = f"Saved search updated:\n{new_url}\n\n" + _sync_summary(listings, failures, new_count)
-    await message.answer(text)
+    keyboard = batch_summary_keyboard(language) if new_count else None
+    await message.answer(text, reply_markup=keyboard)
 
 
 @router.message(Command("parse_custom"))

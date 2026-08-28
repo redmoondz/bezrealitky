@@ -220,6 +220,12 @@ CREATE INDEX IF NOT EXISTS user_listing_relevance_relevant_idx
 -- user_listing_relevance existed before scoring — see the ALTER block above
 -- listings for why this needs an explicit, idempotent ALTER too.
 ALTER TABLE user_listing_relevance ADD COLUMN IF NOT EXISTS score INTEGER NOT NULL DEFAULT 0;
+
+-- 'like' / 'dislike' / NULL (not yet reacted to). Written only by
+-- record_reaction(), never touched by sync_user_listings()'s relevance
+-- reset -- same survives-a-resync guarantee notified_at already has.
+ALTER TABLE user_listing_relevance ADD COLUMN IF NOT EXISTS reaction TEXT;
+ALTER TABLE user_listing_relevance ADD COLUMN IF NOT EXISTS reacted_at TIMESTAMPTZ;
 """
 
 _LISTINGS_UPSERT_SQL = f"""
@@ -457,10 +463,16 @@ def fetch_relevant_listings(conn: psycopg.Connection, telegram_user_id: int) -> 
 
 
 def count_relevant_listings(conn: psycopg.Connection, telegram_user_id: int) -> int:
+    """Count of the /list swipe queue — relevant listings not yet reacted to.
+
+    Reacted listings are excluded here (unlike :func:`fetch_relevant_listings`,
+    used for /charts) since once a user likes or dislikes a listing it's
+    "seen" and shouldn't keep occupying their queue.
+    """
     with conn.cursor() as cursor:
         cursor.execute(
             "SELECT count(*) AS n FROM user_listing_relevance "
-            "WHERE telegram_user_id = %s AND is_relevant",
+            "WHERE telegram_user_id = %s AND is_relevant AND reaction IS NULL",
             (telegram_user_id,),
         )
         return cursor.fetchone()["n"]
@@ -469,13 +481,61 @@ def count_relevant_listings(conn: psycopg.Connection, telegram_user_id: int) -> 
 def fetch_relevant_listings_page(
     conn: psycopg.Connection, telegram_user_id: int, offset: int, limit: int
 ) -> list[dict]:
+    """One page of the /list swipe queue — see :func:`count_relevant_listings`
+    for why reacted listings are excluded.
+    """
     with conn.cursor() as cursor:
         cursor.execute(
             _RELEVANT_JOIN_SQL
+            + " AND r.reaction IS NULL"
             + " ORDER BY r.score DESC, r.last_seen_at DESC, l.listing_id DESC OFFSET %s LIMIT %s",
             (telegram_user_id, offset, limit),
         )
         return cursor.fetchall()
+
+
+def count_liked_listings(conn: psycopg.Connection, telegram_user_id: int) -> int:
+    with conn.cursor() as cursor:
+        cursor.execute(
+            "SELECT count(*) AS n FROM user_listing_relevance "
+            "WHERE telegram_user_id = %s AND reaction = 'like'",
+            (telegram_user_id,),
+        )
+        return cursor.fetchone()["n"]
+
+
+def fetch_liked_listings_page(
+    conn: psycopg.Connection, telegram_user_id: int, offset: int, limit: int
+) -> list[dict]:
+    """One page of a user's personal liked-listings list, most recently liked
+    first. Filtered on ``reaction = 'like'`` rather than ``is_relevant`` — a
+    liked listing stays in this list even if a later resync or saved-search
+    change would otherwise drop it from /list.
+    """
+    with conn.cursor() as cursor:
+        cursor.execute(
+            "SELECT l.*, r.score FROM listings l "
+            "JOIN user_listing_relevance r ON r.listing_id = l.listing_id "
+            "WHERE r.telegram_user_id = %s AND r.reaction = 'like' "
+            "ORDER BY r.reacted_at DESC OFFSET %s LIMIT %s",
+            (telegram_user_id, offset, limit),
+        )
+        return cursor.fetchall()
+
+
+def record_reaction(
+    conn: psycopg.Connection, telegram_user_id: int, listing_id: str, reaction: str
+) -> None:
+    """Record a like/dislike. A plain UPDATE, not an upsert — the row already
+    exists because the listing was loaded via a query joining this same table.
+    """
+    with conn.transaction():
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "UPDATE user_listing_relevance SET reaction = %s, reacted_at = now() "
+                "WHERE telegram_user_id = %s AND listing_id = %s",
+                (reaction, telegram_user_id, listing_id),
+            )
 
 
 def count_unnotified_relevant_listings(conn: psycopg.Connection, telegram_user_id: int) -> int:

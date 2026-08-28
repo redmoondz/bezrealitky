@@ -1,7 +1,20 @@
-"""``/list`` (paginated browsing) and ``/view <listing_id>`` (full detail).
+"""``/list`` (paginated browsing, Tinder-style Like/Dislike), ``/view <listing_id>``
+(full detail), and ``/liked`` (a user's own liked listings).
 
 Every query is scoped to the calling Telegram user's own saved search — there is
-no shared "the current saved search," each user has their own.
+no shared "the current saved search," each user has their own. Liking or
+disliking a listing removes it from /list for good (see ``reaction`` on
+``user_listing_relevance``); liked listings additionally stay browsable via
+/liked regardless of whether the listing is still ``is_relevant``.
+
+Each card's photos go out first as their own message(s) since Telegram's
+``sendMediaGroup`` can't carry an inline keyboard, then a details message with
+the Like/Dislike/Prev/Next keyboard follows. A media group can't be edited in
+place, so Prev/Next/Like/Dislike send a fresh card rather than editing the old
+one — but the previous card's messages (photos + details) are deleted first,
+tracked per-chat via FSM storage's freeform data (``card_message_ids``,
+independent of any actual FSM *state*), so the chat always shows one current
+card rather than accumulating every card ever shown.
 """
 
 from __future__ import annotations
@@ -10,13 +23,14 @@ import asyncio
 
 from aiogram import F, Router
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InputMediaPhoto, Message
 
 from src import db
 
 from .. import formatting
 from ..access import IsAllowed, denial_text
-from ..keyboards import PAGE_SIZE, listing_keyboard
+from ..keyboards import PAGE_SIZE, listing_keyboard, reaction_keyboard
 
 router = Router(name="browse")
 
@@ -28,6 +42,21 @@ def _load_page(telegram_user_id: int, offset: int) -> tuple[int, dict | None, st
         rows = db.fetch_relevant_listings_page(conn, telegram_user_id, offset, PAGE_SIZE)
         language = db.get_user_language(conn, telegram_user_id)
         return total, (rows[0] if rows else None), language
+
+
+def _load_liked_page(telegram_user_id: int, offset: int) -> tuple[int, dict | None, str]:
+    with db.connect() as conn:
+        db.ensure_schema(conn)
+        total = db.count_liked_listings(conn, telegram_user_id)
+        rows = db.fetch_liked_listings_page(conn, telegram_user_id, offset, PAGE_SIZE)
+        language = db.get_user_language(conn, telegram_user_id)
+        return total, (rows[0] if rows else None), language
+
+
+def _record_reaction(telegram_user_id: int, listing_id: str, reaction: str) -> None:
+    with db.connect() as conn:
+        db.ensure_schema(conn)
+        db.record_reaction(conn, telegram_user_id, listing_id, reaction)
 
 
 def _load_detail(listing_id: str, telegram_user_id: int) -> tuple[dict | None, str, str, bool]:
@@ -45,42 +74,86 @@ def _load_detail(listing_id: str, telegram_user_id: int) -> tuple[dict | None, s
     return row, translated, language, translation_ok
 
 
-async def _send_page(message: Message, telegram_user_id: int, offset: int) -> None:
+_CARD_PHOTO_COUNT = 4
+
+
+async def _clear_previous_card(message: Message, state: FSMContext) -> None:
+    """Delete every message from the last card shown in this chat, if any —
+    called right before showing a new one so the chat holds a single current
+    card instead of piling up every past card.
+    """
+    data = await state.get_data()
+    for message_id in data.get("card_message_ids") or []:
+        try:
+            await message.bot.delete_message(message.chat.id, message_id)
+        except Exception:  # noqa: BLE001 - already gone/too old/no permission; nothing to recover
+            pass
+    await state.update_data(card_message_ids=[])
+
+
+async def _send_card_photos(message: Message, images: list[str]) -> list[int]:
+    """A card's photos as their own message(s) — a Telegram photo caption can
+    carry an inline keyboard, but ``sendMediaGroup`` cannot, so the keyboard
+    always lives on the separate details message sent right after this.
+    Returns the sent messages' IDs so the card can be deleted as a whole later.
+    """
+    if len(images) >= 2:
+        sent = await message.answer_media_group(
+            [InputMediaPhoto(media=url) for url in images[:_CARD_PHOTO_COUNT]]
+        )
+        return [item.message_id for item in sent]
+    if images:
+        sent = await message.answer_photo(images[0])
+        return [sent.message_id]
+    return []
+
+
+async def _render_card(
+    message: Message,
+    row: dict,
+    offset: int,
+    total: int,
+    language: str,
+    state: FSMContext,
+    nav_prefix: str = "page",
+    show_reactions: bool = True,
+) -> None:
+    message_ids = await _send_card_photos(message, row.get("images") or [])
+    caption = formatting.summary_caption(row, offset, total, language)
+    keyboard = listing_keyboard(
+        row["listing_id"], row["url"], offset, total, nav_prefix=nav_prefix, show_reactions=show_reactions
+    )
+    details = await message.answer(caption, parse_mode="HTML", reply_markup=keyboard)
+    message_ids.append(details.message_id)
+    await state.update_data(card_message_ids=message_ids)
+
+
+async def _send_page(message: Message, telegram_user_id: int, offset: int, state: FSMContext) -> None:
     total, row, language = await asyncio.to_thread(_load_page, telegram_user_id, offset)
+    await _clear_previous_card(message, state)
     if row is None:
         await message.answer(
             "No listings match your saved search yet. Try /parse to scrape now, "
             "or /search to see what's saved."
         )
         return
-    caption = formatting.summary_caption(row, offset, total, language)
-    keyboard = listing_keyboard(row["listing_id"], row["url"], offset, total)
-    images = row.get("images") or []
-    if images:
-        await message.answer_photo(images[0], caption=caption, parse_mode="HTML", reply_markup=keyboard)
-    else:
-        await message.answer(caption, parse_mode="HTML", reply_markup=keyboard)
+    await _render_card(message, row, offset, total, language, state)
 
 
-async def _edit_page(query: CallbackQuery, telegram_user_id: int, offset: int) -> None:
-    total, row, language = await asyncio.to_thread(_load_page, telegram_user_id, offset)
-    if row is None or not query.message:
-        await query.answer("No more listings.", show_alert=True)
+async def _send_liked_page(
+    message: Message, telegram_user_id: int, offset: int, state: FSMContext
+) -> None:
+    total, row, language = await asyncio.to_thread(_load_liked_page, telegram_user_id, offset)
+    await _clear_previous_card(message, state)
+    if row is None:
+        await message.answer("You haven't liked any listings yet — like one from /list.")
         return
-    caption = formatting.summary_caption(row, offset, total, language)
-    keyboard = listing_keyboard(row["listing_id"], row["url"], offset, total)
-    images = row.get("images") or []
-    if images:
-        await query.message.edit_media(
-            InputMediaPhoto(media=images[0], caption=caption, parse_mode="HTML"),
-            reply_markup=keyboard,
-        )
-    else:
-        await query.message.edit_text(caption, parse_mode="HTML", reply_markup=keyboard)
-    await query.answer()
+    await _render_card(
+        message, row, offset, total, language, state, nav_prefix="likedpage", show_reactions=False
+    )
 
 
-async def _send_detail(target: Message, listing_id: str, telegram_user_id: int) -> None:
+async def _send_detail(target: Message, listing_id: str, telegram_user_id: int, offset: int = 0) -> None:
     row, translated, language, translation_ok = await asyncio.to_thread(
         _load_detail, listing_id, telegram_user_id
     )
@@ -93,7 +166,9 @@ async def _send_detail(target: Message, listing_id: str, telegram_user_id: int) 
     elif images:
         await target.answer_photo(images[0])
     await target.answer(
-        formatting.detail_text(row, translated, language, translation_ok), parse_mode="HTML"
+        formatting.detail_text(row, translated, language, translation_ok),
+        parse_mode="HTML",
+        reply_markup=reaction_keyboard(listing_id, offset, prefix="reactd"),
     )
     latitude, longitude = row.get("latitude"), row.get("longitude")
     if latitude is not None and longitude is not None:
@@ -110,8 +185,8 @@ async def _send_detail(target: Message, listing_id: str, telegram_user_id: int) 
 
 
 @router.message(Command("list"), IsAllowed())
-async def list_listings(message: Message) -> None:
-    await _send_page(message, message.from_user.id, 0)
+async def list_listings(message: Message, state: FSMContext) -> None:
+    await _send_page(message, message.from_user.id, 0, state)
 
 
 @router.message(Command("list"))
@@ -125,7 +200,7 @@ async def view_listing(message: Message) -> None:
     if len(parts) < 2:
         await message.answer("Usage: /view <listing_id> — the ID shown on a listing card.")
         return
-    await _send_detail(message, parts[1].strip(), message.from_user.id)
+    await _send_detail(message, parts[1].strip(), message.from_user.id, 0)
 
 
 @router.message(Command("view"))
@@ -133,27 +208,68 @@ async def view_listing_denied(message: Message) -> None:
     await message.answer(denial_text())
 
 
+@router.message(Command("liked"), IsAllowed())
+async def liked_listings(message: Message, state: FSMContext) -> None:
+    await _send_liked_page(message, message.from_user.id, 0, state)
+
+
+@router.message(Command("liked"))
+async def liked_listings_denied(message: Message) -> None:
+    await message.answer(denial_text())
+
+
 @router.callback_query(F.data.startswith("page:"), IsAllowed())
-async def on_page(query: CallbackQuery) -> None:
+async def on_page(query: CallbackQuery, state: FSMContext) -> None:
     offset = int(query.data.split(":", 1)[1])
-    await _edit_page(query, query.from_user.id, offset)
+    await query.answer()
+    if query.message:
+        await _send_page(query.message, query.from_user.id, offset, state)
+
+
+@router.callback_query(F.data.startswith("likedpage:"), IsAllowed())
+async def on_liked_page(query: CallbackQuery, state: FSMContext) -> None:
+    offset = int(query.data.split(":", 1)[1])
+    await query.answer()
+    if query.message:
+        await _send_liked_page(query.message, query.from_user.id, offset, state)
+
+
+@router.callback_query(F.data.startswith("react:") | F.data.startswith("reactd:"), IsAllowed())
+async def on_react(query: CallbackQuery, state: FSMContext) -> None:
+    """Liking/disliking from a /list swipe card (``react:``) or from the /view
+    detail card (``reactd:``) — either way, records the reaction and hands
+    back into the /list queue at that card's offset to keep the swipe flow
+    going.
+    """
+    _, reaction, offset_str, listing_id = query.data.split(":", 3)
+    await asyncio.to_thread(_record_reaction, query.from_user.id, listing_id, reaction)
+    await query.answer("❤️ Liked" if reaction == "like" else "👎 Passed")
+    if query.message:
+        await _send_page(query.message, query.from_user.id, int(offset_str), state)
 
 
 @router.callback_query(F.data.startswith("view:"), IsAllowed())
 async def on_view(query: CallbackQuery) -> None:
-    listing_id = query.data.split(":", 1)[1]
+    _, offset_str, listing_id = query.data.split(":", 2)
     if query.message:
-        await _send_detail(query.message, listing_id, query.from_user.id)
+        await _send_detail(query.message, listing_id, query.from_user.id, int(offset_str))
     await query.answer()
 
 
 @router.callback_query(F.data == "menu:browse", IsAllowed())
-async def on_menu_browse(query: CallbackQuery) -> None:
+async def on_menu_browse(query: CallbackQuery, state: FSMContext) -> None:
     if query.message:
-        await _send_page(query.message, query.from_user.id, 0)
+        await _send_page(query.message, query.from_user.id, 0, state)
     await query.answer()
 
 
-@router.callback_query(F.data.startswith("page:") | F.data.startswith("view:") | (F.data == "menu:browse"))
+@router.callback_query(
+    F.data.startswith("page:")
+    | F.data.startswith("likedpage:")
+    | F.data.startswith("react:")
+    | F.data.startswith("reactd:")
+    | F.data.startswith("view:")
+    | (F.data == "menu:browse")
+)
 async def on_gated_callback_denied(query: CallbackQuery) -> None:
     await query.answer(denial_text(), show_alert=True)

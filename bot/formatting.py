@@ -48,6 +48,11 @@ def _deposit_text(row: dict) -> str:
     return f"{deposit} {currency}".strip()
 
 
+def _furnished_text(row: dict) -> str:
+    value = row.get("fully_furnished")
+    return escape(value) if value else "—"
+
+
 def summary_caption(row: dict, offset: int, total: int, language: str = "en") -> str:
     """Short caption for a single card in the /list pager (Telegram photo captions
     are capped at 1024 characters, so the full description lives in /view only).
@@ -59,6 +64,7 @@ def summary_caption(row: dict, offset: int, total: int, language: str = "en") ->
         f"<b>{escape(row.get('name') or 'Untitled listing')}</b>\n"
         f"💰 Rent: {_price_text(row)}   💵 Deposit: {_deposit_text(row)}\n"
         f"📐 {area}   🛏 {escape(row.get('format') or '—')}\n"
+        f"🛋 Furnished: {_furnished_text(row)}\n"
         f"🪜 Floor {_floor_text(row)}   🐾 Pets: {pets}\n"
         f"📍 {escape(row.get('location') or '—')}\n"
         f"{_tags_line(language, row)}"
@@ -81,6 +87,7 @@ def detail_text(row: dict, description: str, language: str = "en", translation_o
         f"<b>{escape(row.get('name') or 'Untitled listing')}</b>\n"
         f"💰 Rent: {_price_text(row)}   💵 Deposit: {_deposit_text(row)}\n"
         f"📐 {area}   🛏 {escape(row.get('format') or '—')}\n"
+        f"🛋 Furnished: {_furnished_text(row)}\n"
         f"🪜 Floor {_floor_text(row)}   🐾 Pets: {pets}\n"
         f"📍 {escape(row.get('location') or '—')}\n"
         f"{_tags_line(language, row)}"

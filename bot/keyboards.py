@@ -54,22 +54,61 @@ def skip_keyboard(callback_data: str) -> InlineKeyboardMarkup:
     )
 
 
-def listing_keyboard(listing_id: str, url: str, offset: int, total: int) -> InlineKeyboardMarkup:
+def reaction_keyboard(listing_id: str, offset: int, prefix: str = "react") -> InlineKeyboardMarkup:
+    """A standalone Like/Dislike row — used both as /list's swipe-card row (via
+    :func:`listing_keyboard`, ``prefix="react"``) and on its own on the /view
+    detail card (``prefix="reactd"``, since that's a distinct callback so its
+    handler knows to hand back into the /list queue afterwards instead of
+    editing a swipe card).
+    """
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="👎 Pass", callback_data=f"{prefix}:dislike:{offset}:{listing_id}"
+                ),
+                InlineKeyboardButton(
+                    text="❤️ Like", callback_data=f"{prefix}:like:{offset}:{listing_id}"
+                ),
+            ]
+        ]
+    )
+
+
+def listing_keyboard(
+    listing_id: str,
+    url: str,
+    offset: int,
+    total: int,
+    nav_prefix: str = "page",
+    show_reactions: bool = True,
+) -> InlineKeyboardMarkup:
+    """``nav_prefix`` namespaces Prev/Next callback data so /list's pager
+    (``page:``) and /liked's pager (``likedpage:``) never collide.
+    ``show_reactions`` adds the Like/Dislike row for the /list swipe queue;
+    /liked omits it since un-liking isn't supported yet.
+    """
     nav_row = []
     if offset > 0:
         nav_row.append(
-            InlineKeyboardButton(text="◂ Prev", callback_data=f"page:{max(0, offset - PAGE_SIZE)}")
+            InlineKeyboardButton(
+                text="◂ Prev", callback_data=f"{nav_prefix}:{max(0, offset - PAGE_SIZE)}"
+            )
         )
     if offset + PAGE_SIZE < total:
         nav_row.append(
-            InlineKeyboardButton(text="Next ▸", callback_data=f"page:{offset + PAGE_SIZE}")
+            InlineKeyboardButton(text="Next ▸", callback_data=f"{nav_prefix}:{offset + PAGE_SIZE}")
         )
     rows = []
     if nav_row:
         rows.append(nav_row)
+    if show_reactions:
+        rows.append(reaction_keyboard(listing_id, offset).inline_keyboard[0])
     rows.append(
         [
-            InlineKeyboardButton(text="Full details & photos", callback_data=f"view:{listing_id}"),
+            InlineKeyboardButton(
+                text="Full details & photos", callback_data=f"view:{offset}:{listing_id}"
+            ),
             InlineKeyboardButton(text="Open listing", url=url),
         ]
     )
