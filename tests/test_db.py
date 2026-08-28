@@ -46,6 +46,13 @@ class RowFromListingTests(TestCase):
             has_internet="True",
             has_dishwasher="False",
             mansard="True",
+            balcony="True",
+            oven="False",
+            microwave="True",
+            refrigerator="False",
+            quiet_surroundings="True",
+            garage="False",
+            english_speaking="True",
         )
         row = db.row_from_listing(listing)
         self.assertIs(row["pets_friendly"], True)
@@ -55,6 +62,13 @@ class RowFromListingTests(TestCase):
         self.assertIs(row["has_internet"], True)
         self.assertIs(row["has_dishwasher"], False)
         self.assertIs(row["mansard"], True)
+        self.assertIs(row["balcony"], True)
+        self.assertIs(row["oven"], False)
+        self.assertIs(row["microwave"], True)
+        self.assertIs(row["refrigerator"], False)
+        self.assertIs(row["quiet_surroundings"], True)
+        self.assertIs(row["garage"], False)
+        self.assertIs(row["english_speaking"], True)
 
     def test_blank_optional_fields_become_none(self):
         listing = Listing(listing_id="1", images="[]")

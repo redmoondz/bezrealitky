@@ -69,6 +69,13 @@ class Listing:
     has_internet: str = ""
     has_dishwasher: str = ""
     mansard: str = ""
+    balcony: str = ""
+    oven: str = ""
+    microwave: str = ""
+    refrigerator: str = ""
+    quiet_surroundings: str = ""
+    garage: str = ""
+    english_speaking: str = ""
 
 
 CSV_FIELDS = list(Listing.__dataclass_fields__)
@@ -417,6 +424,13 @@ def parse_listing(content: str, listing_url: str) -> Listing:
         has_internet=amenities["has_internet"],
         has_dishwasher=amenities["has_dishwasher"],
         mansard=amenities["mansard"],
+        balcony=amenities["balcony"],
+        oven=amenities["oven"],
+        microwave=amenities["microwave"],
+        refrigerator=amenities["refrigerator"],
+        quiet_surroundings=amenities["quiet_surroundings"],
+        garage=amenities["garage"],
+        english_speaking=amenities["english_speaking"],
     )
 
 

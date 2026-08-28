@@ -111,6 +111,115 @@ MANSARD = Taxonomy(
     negative_phrases=[],
 )
 
+BALCONY = Taxonomy(
+    positive_phrases=[
+        "balkón",
+        "balkonem",
+        "s balkónem",
+        "balkonu",
+        "balcony",
+    ],
+    negative_phrases=[
+        "bez balkónu",
+        "no balcony",
+        "without a balcony",
+    ],
+)
+
+OVEN = Taxonomy(
+    positive_phrases=[
+        "trouba",
+        "troubou",
+        "vestavěná trouba",
+        "oven",
+        "built-in oven",
+    ],
+    negative_phrases=[
+        "bez trouby",
+        "no oven",
+        "without an oven",
+    ],
+)
+
+MICROWAVE = Taxonomy(
+    positive_phrases=[
+        "mikrovlnka",
+        "mikrovlnnou troubu",
+        "mikrovlnná trouba",
+        "microwave",
+    ],
+    negative_phrases=[
+        "bez mikrovlnky",
+        "no microwave",
+        "without a microwave",
+    ],
+)
+
+REFRIGERATOR = Taxonomy(
+    positive_phrases=[
+        "lednice",
+        "lednička",
+        "ledničkou",
+        "fridge",
+        "refrigerator",
+    ],
+    negative_phrases=[
+        "bez lednice",
+        "no fridge",
+        "no refrigerator",
+        "without a fridge",
+    ],
+)
+
+# No negative phrases, same reasoning as MANSARD — the negation window alone
+# catches the rare "not a quiet area" phrasing.
+QUIET_SURROUNDINGS = Taxonomy(
+    positive_phrases=[
+        "klidné okolí",
+        "klidná lokalita",
+        "klidné prostředí",
+        "klidná ulice",
+        "klidná čtvrť",
+        "tiché prostředí",
+        "quiet area",
+        "quiet location",
+        "quiet neighbourhood",
+        "quiet neighborhood",
+        "quiet street",
+    ],
+    negative_phrases=[],
+)
+
+GARAGE = Taxonomy(
+    positive_phrases=[
+        "garáž",
+        "garáží",
+        "s garáží",
+        "garage",
+    ],
+    negative_phrases=[
+        "bez garáže",
+        "no garage",
+        "without a garage",
+    ],
+)
+
+# No negative phrases — a listing doesn't usually assert "we do NOT speak
+# English"; the negation window alone is enough for the rare case.
+ENGLISH_SPEAKING = Taxonomy(
+    positive_phrases=[
+        "komunikace v angličtině",
+        "mluvíme anglicky",
+        "anglicky mluvící",
+        "domluvíme se v angličtině",
+        "we speak english",
+        "english speaking",
+        "communication in english",
+        "english communication",
+    ],
+    negative_phrases=[],
+)
+
 # Keyed by the exact Listing/listings-column field name each taxonomy fills in.
 AMENITY_TAXONOMIES: dict[str, Taxonomy] = {
     "air_conditioning": AIR_CONDITIONING,
@@ -119,6 +228,13 @@ AMENITY_TAXONOMIES: dict[str, Taxonomy] = {
     "has_internet": INTERNET,
     "has_dishwasher": DISHWASHER,
     "mansard": MANSARD,
+    "balcony": BALCONY,
+    "oven": OVEN,
+    "microwave": MICROWAVE,
+    "refrigerator": REFRIGERATOR,
+    "quiet_surroundings": QUIET_SURROUNDINGS,
+    "garage": GARAGE,
+    "english_speaking": ENGLISH_SPEAKING,
 }
 
 

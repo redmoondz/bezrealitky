@@ -102,6 +102,13 @@ class ScraperTests(TestCase):
         self.assertEqual(listing.has_internet, "")
         self.assertEqual(listing.has_dishwasher, "")
         self.assertEqual(listing.mansard, "")
+        self.assertEqual(listing.balcony, "")
+        self.assertEqual(listing.oven, "")
+        self.assertEqual(listing.microwave, "")
+        self.assertEqual(listing.refrigerator, "")
+        self.assertEqual(listing.quiet_surroundings, "")
+        self.assertEqual(listing.garage, "")
+        self.assertEqual(listing.english_speaking, "")
 
     def test_uses_listing_specific_html_image_fallback(self):
         html = """

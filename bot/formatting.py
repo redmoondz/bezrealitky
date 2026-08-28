@@ -13,7 +13,9 @@ _PETS_LABELS = {True: "Yes", False: "No", None: "Unknown"}
 
 def _tags_line(language: str, row: dict) -> str:
     tags = i18n.amenity_tags(language, row)
-    return f"🏷 {'   '.join(tags)}\n" if tags else ""
+    # A leading blank line so the tags don't visually run into the row above —
+    # only emitted when there are tags, so the no-tags case adds no stray gap.
+    return f"\n🏷 {'   '.join(tags)}\n" if tags else ""
 
 
 def _top_match_badge(row: dict) -> str:
@@ -38,6 +40,14 @@ def _price_text(row: dict) -> str:
     return f"{row['total_price']} {currency}".strip()
 
 
+def _deposit_text(row: dict) -> str:
+    deposit = row.get("refundable_deposit")
+    if deposit is None:
+        return "—"
+    currency = row.get("currency") or ""
+    return f"{deposit} {currency}".strip()
+
+
 def summary_caption(row: dict, offset: int, total: int, language: str = "en") -> str:
     """Short caption for a single card in the /list pager (Telegram photo captions
     are capped at 1024 characters, so the full description lives in /view only).
@@ -47,7 +57,8 @@ def summary_caption(row: dict, offset: int, total: int, language: str = "en") ->
     return (
         f"{_top_match_badge(row)}"
         f"<b>{escape(row.get('name') or 'Untitled listing')}</b>\n"
-        f"💰 {_price_text(row)}   📐 {area}   🛏 {escape(row.get('format') or '—')}\n"
+        f"💰 Rent: {_price_text(row)}   💵 Deposit: {_deposit_text(row)}\n"
+        f"📐 {area}   🛏 {escape(row.get('format') or '—')}\n"
         f"🪜 Floor {_floor_text(row)}   🐾 Pets: {pets}\n"
         f"📍 {escape(row.get('location') or '—')}\n"
         f"{_tags_line(language, row)}"
@@ -62,7 +73,8 @@ def detail_text(row: dict, description: str, language: str = "en") -> str:
     body = (
         f"{_top_match_badge(row)}"
         f"<b>{escape(row.get('name') or 'Untitled listing')}</b>\n"
-        f"💰 {_price_text(row)}   📐 {area}   🛏 {escape(row.get('format') or '—')}\n"
+        f"💰 Rent: {_price_text(row)}   💵 Deposit: {_deposit_text(row)}\n"
+        f"📐 {area}   🛏 {escape(row.get('format') or '—')}\n"
         f"🪜 Floor {_floor_text(row)}   🐾 Pets: {pets}\n"
         f"📍 {escape(row.get('location') or '—')}\n"
         f"{_tags_line(language, row)}"

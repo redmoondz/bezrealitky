@@ -40,6 +40,13 @@ _AMENITY_EMOJI = {
     "has_internet": "📶",
     "has_dishwasher": "🍽",
     "mansard": "🔺",
+    "balcony": "🌇",
+    "oven": "🔥",
+    "microwave": "♨️",
+    "refrigerator": "🧊",
+    "quiet_surroundings": "🤫",
+    "garage": "🚗",
+    "english_speaking": "🗣",
 }
 
 _AMENITY_LABELS = {
@@ -78,6 +85,48 @@ _AMENITY_LABELS = {
         "cs": "Podkroví",
         "ru": "Мансарда",
         "uk": "Мансарда",
+    },
+    "balcony": {
+        "en": "Balcony",
+        "cs": "Balkón",
+        "ru": "Балкон",
+        "uk": "Балкон",
+    },
+    "oven": {
+        "en": "Oven",
+        "cs": "Trouba",
+        "ru": "Духовка",
+        "uk": "Духовка",
+    },
+    "microwave": {
+        "en": "Microwave",
+        "cs": "Mikrovlnka",
+        "ru": "Микроволновка",
+        "uk": "Мікрохвильовка",
+    },
+    "refrigerator": {
+        "en": "Fridge",
+        "cs": "Lednice",
+        "ru": "Холодильник",
+        "uk": "Холодильник",
+    },
+    "quiet_surroundings": {
+        "en": "Quiet area",
+        "cs": "Klidné okolí",
+        "ru": "Тихое окружение",
+        "uk": "Тиха місцевість",
+    },
+    "garage": {
+        "en": "Garage",
+        "cs": "Garáž",
+        "ru": "Гараж",
+        "uk": "Гараж",
+    },
+    "english_speaking": {
+        "en": "English OK",
+        "cs": "Anglicky",
+        "ru": "Английский",
+        "uk": "Англійська",
     },
 }
 

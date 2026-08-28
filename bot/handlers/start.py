@@ -7,6 +7,8 @@ useful to set up before an operator has approved a user's Telegram ID.
 from __future__ import annotations
 
 import asyncio
+from html import escape
+from urllib.parse import parse_qs, urlparse
 
 from aiogram import F, Router
 from aiogram.filters import Command
@@ -32,6 +34,7 @@ router = Router(name="start")
 
 
 class Onboarding(StatesGroup):
+    waiting_for_language = State()
     waiting_for_url = State()
     waiting_for_pets = State()
     waiting_for_budget = State()
@@ -51,11 +54,26 @@ ONBOARDING_PROMPT = (
 
 PETS_PROMPT = "🐾 Do you have — or want — a place that's pet-friendly?"
 
-BUDGET_PROMPT = (
-    "💰 What's your monthly budget, <b>all costs included</b> (rent + service + "
-    "utility charges)? Send a plain number (e.g. 25000), or tap Skip.\n\n"
-    "This only affects how listings are ranked for you — it won't hide anything."
-)
+_DEFAULT_CURRENCY = "CZK"
+
+
+def _search_currency(search_url: str) -> str:
+    """The ``currency`` filter from the user's own saved search URL — the same
+    currency their listing prices are already shown in, so the budget question
+    isn't ambiguous about units.
+    """
+    values = parse_qs(urlparse(search_url).query).get("currency")
+    return values[0].upper() if values else _DEFAULT_CURRENCY
+
+
+def _budget_prompt(currency: str) -> str:
+    return (
+        f"💰 What's your monthly budget, <b>all costs included</b> (rent + service + "
+        f"utility charges), in <b>{escape(currency)}</b>? Send a plain number (e.g. 25000), "
+        "or tap Skip.\n\n"
+        "This only affects how listings are ranked for you — it won't hide anything."
+    )
+
 
 AREA_PROMPT = (
     "📐 Any minimum size you need, in m²? Send a plain number (e.g. 40), or tap Skip."
@@ -148,8 +166,12 @@ async def _ask_pets(message: Message, state: FSMContext, search_url: str) -> Non
 
 
 async def _ask_budget(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    currency = _search_currency(data.get("search_url", ""))
     await state.set_state(Onboarding.waiting_for_budget)
-    await message.answer(BUDGET_PROMPT, reply_markup=skip_keyboard("budget_pref:skip"))
+    await message.answer(
+        _budget_prompt(currency), parse_mode="HTML", reply_markup=skip_keyboard("budget_pref:skip")
+    )
 
 
 async def _ask_area(message: Message, state: FSMContext) -> None:
@@ -165,6 +187,7 @@ async def _finish_onboarding_from_state(message: Message, telegram_user_id: int,
 
 
 async def _finish_onboarding(message: Message, telegram_user_id: int, search_url: str) -> None:
+    await message.answer(HELP_TEXT, parse_mode="HTML")
     await message.answer(ONBOARDING_RUNNING)
     try:
         _listings, failures = await asyncio.to_thread(_save_and_run, telegram_user_id, search_url)
@@ -182,22 +205,16 @@ async def _finish_onboarding(message: Message, telegram_user_id: int, search_url
 
 @router.message(Command("start"))
 async def start(message: Message, state: FSMContext) -> None:
-    telegram_user_id = message.from_user.id
-    has_search = await asyncio.to_thread(_has_saved_search, telegram_user_id)
+    await state.set_state(Onboarding.waiting_for_language)
     await message.answer(
         "Welcome! Pick the language you'd like listing descriptions translated into:",
         reply_markup=language_keyboard(),
     )
-    await message.answer(HELP_TEXT)
-    if has_search:
-        return
-    await state.set_state(Onboarding.waiting_for_url)
-    await message.answer(ONBOARDING_PROMPT, reply_markup=onboarding_keyboard())
 
 
 @router.message(Command("help"))
 async def help_command(message: Message) -> None:
-    await message.answer(HELP_TEXT)
+    await message.answer(HELP_TEXT, parse_mode="HTML")
 
 
 @router.message(Onboarding.waiting_for_url, F.text, ~F.text.startswith("/"), IsAllowed())
@@ -284,14 +301,43 @@ async def language(message: Message) -> None:
     await message.answer("Pick a language:", reply_markup=language_keyboard())
 
 
-@router.callback_query(lambda query: query.data and query.data.startswith("lang:"))
-async def on_language_chosen(query: CallbackQuery) -> None:
+async def _apply_language_choice(query: CallbackQuery) -> str | None:
+    """Save the chosen language and confirm it in-place. Returns the language's
+    display label, or ``None`` if the code was invalid (already answered).
+    """
     code = query.data.split(":", 1)[1]
     if code not in config.SUPPORTED_LANGUAGE_CODES:
         await query.answer("Unknown language.", show_alert=True)
-        return
+        return None
     await asyncio.to_thread(_set_language, query.from_user.id, code)
     label = dict(config.SUPPORTED_LANGUAGES)[code]
     await query.answer(f"Language set to {label}.")
     if query.message:
         await query.message.edit_text(f"Descriptions will now be translated into {label}.")
+    return label
+
+
+@router.callback_query(Onboarding.waiting_for_language, F.data.startswith("lang:"))
+async def on_start_language_chosen(query: CallbackQuery, state: FSMContext) -> None:
+    """The very first language pick, right after /start — continues straight
+    into onboarding instead of just confirming the choice, so /start's messages
+    arrive one step at a time instead of all at once.
+    """
+    if await _apply_language_choice(query) is None:
+        return
+    has_search = await asyncio.to_thread(_has_saved_search, query.from_user.id)
+    if has_search:
+        await state.clear()
+        if query.message:
+            await query.message.answer(HELP_TEXT, parse_mode="HTML")
+        return
+    await state.set_state(Onboarding.waiting_for_url)
+    if query.message:
+        await query.message.answer(
+            ONBOARDING_PROMPT, parse_mode="HTML", reply_markup=onboarding_keyboard()
+        )
+
+
+@router.callback_query(F.data.startswith("lang:"))
+async def on_language_chosen(query: CallbackQuery) -> None:
+    await _apply_language_choice(query)

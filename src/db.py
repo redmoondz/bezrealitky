@@ -78,6 +78,13 @@ _BOOLEAN_COLUMNS = (
     "has_internet",
     "has_dishwasher",
     "mansard",
+    "balcony",
+    "oven",
+    "microwave",
+    "refrigerator",
+    "quiet_surroundings",
+    "garage",
+    "english_speaking",
 )
 
 _ALL_COLUMNS = _TEXT_COLUMNS + _NUMERIC_COLUMNS + _INTEGER_COLUMNS + ("images",) + _BOOLEAN_COLUMNS
@@ -117,6 +124,13 @@ CREATE TABLE IF NOT EXISTS listings (
     has_internet BOOLEAN,
     has_dishwasher BOOLEAN,
     mansard BOOLEAN,
+    balcony BOOLEAN,
+    oven BOOLEAN,
+    microwave BOOLEAN,
+    refrigerator BOOLEAN,
+    quiet_surroundings BOOLEAN,
+    garage BOOLEAN,
+    english_speaking BOOLEAN,
     first_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -133,6 +147,13 @@ ALTER TABLE listings ADD COLUMN IF NOT EXISTS has_dryer BOOLEAN;
 ALTER TABLE listings ADD COLUMN IF NOT EXISTS has_internet BOOLEAN;
 ALTER TABLE listings ADD COLUMN IF NOT EXISTS has_dishwasher BOOLEAN;
 ALTER TABLE listings ADD COLUMN IF NOT EXISTS mansard BOOLEAN;
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS balcony BOOLEAN;
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS oven BOOLEAN;
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS microwave BOOLEAN;
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS refrigerator BOOLEAN;
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS quiet_surroundings BOOLEAN;
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS garage BOOLEAN;
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS english_speaking BOOLEAN;
 
 CREATE TABLE IF NOT EXISTS bot_users (
     telegram_user_id BIGINT PRIMARY KEY,
