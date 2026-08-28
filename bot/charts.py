@@ -21,6 +21,14 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
+from .chart_stats import (
+    format_counts,
+    numeric_values,
+    pets_counts,
+    price_area_pairs,
+    price_per_unit_values,
+)
+
 SURFACE = "#fcfcfb"
 INK_PRIMARY = "#0b0b0b"
 INK_SECONDARY = "#52514e"
@@ -32,8 +40,6 @@ SERIES_1 = "#2a78d6"  # blue
 SERIES_2 = "#eb6834"  # orange
 SERIES_3 = "#1baf7a"  # aqua
 NEUTRAL_OTHER = "#898781"
-
-PETS_LABELS = {True: "Yes", False: "No", None: "Unknown"}
 
 
 def _new_axes():
@@ -61,12 +67,8 @@ def _finish(fig) -> bytes:
     return buffer.getvalue()
 
 
-def _numeric_values(rows: list[dict], key: str) -> list[float]:
-    return [float(row[key]) for row in rows if row.get(key) is not None]
-
-
 def _histogram(rows: list[dict], key: str, title: str, xlabel: str) -> bytes:
-    values = _numeric_values(rows, key)
+    values = numeric_values(rows, key)
     fig, ax = _new_axes()
     if values:
         ax.hist(values, bins=min(20, max(5, len(values) // 3)), color=SERIES_1, rwidth=0.9)
@@ -87,11 +89,7 @@ def price_distribution(rows: list[dict]) -> bytes:
 
 
 def price_per_unit_distribution(rows: list[dict]) -> bytes:
-    values = [
-        float(row["total_price"]) / float(row["area"])
-        for row in rows
-        if row.get("total_price") is not None and row.get("area")
-    ]
+    values = price_per_unit_values(rows)
     fig, ax = _new_axes()
     if values:
         ax.hist(values, bins=min(20, max(5, len(values) // 3)), color=SERIES_1, rwidth=0.9)
@@ -104,11 +102,7 @@ def price_per_unit_distribution(rows: list[dict]) -> bytes:
 
 
 def price_vs_area(rows: list[dict]) -> bytes:
-    pairs = [
-        (float(row["area"]), float(row["total_price"]))
-        for row in rows
-        if row.get("area") is not None and row.get("total_price") is not None
-    ]
+    pairs = price_area_pairs(rows)
     fig, ax = _new_axes()
     if pairs:
         areas, prices = zip(*pairs)
@@ -152,28 +146,11 @@ def _pie(counts: list[tuple[str, int]], title: str) -> bytes:
 
 
 def format_breakdown(rows: list[dict]) -> bytes:
-    counts: dict[str, int] = {}
-    for row in rows:
-        key = (row.get("format") or "Unknown").strip() or "Unknown"
-        counts[key] = counts.get(key, 0) + 1
-    ordered = sorted(counts.items(), key=lambda item: item[1], reverse=True)
-    top, rest = ordered[:3], ordered[3:]
-    if rest:
-        top.append(("Other", sum(count for _, count in rest)))
-    return _pie(top, "Listings by layout")
+    return _pie(format_counts(rows), "Listings by layout")
 
 
 def pets_friendly_breakdown(rows: list[dict]) -> bytes:
-    counts: dict[str, int] = {}
-    for row in rows:
-        label = PETS_LABELS[row.get("pets_friendly")]
-        counts[label] = counts.get(label, 0) + 1
-    ordered = [
-        (label, counts[label])
-        for label in ("Yes", "No", "Unknown")
-        if label in counts
-    ]
-    return _pie(ordered, "Listings by pets_friendly")
+    return _pie(pets_counts(rows), "Listings by pets_friendly")
 
 
 CHART_BUILDERS = {

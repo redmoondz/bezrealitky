@@ -163,3 +163,52 @@ New listings that become relevant to a user's saved search are pushed to them
 automatically (their own Telegram chat) — checked every `NOTIFY_POLL_SECONDS`
 (default 10 min) by the bot process, independent of the scheduler's own 2-hour
 cadence.
+
+## Mini App (`webapp/`)
+
+The same functionality as the bot — onboarding, browsing with like/pass,
+liked listings, saved-search management, and charts — as a Telegram Mini App
+(a web UI opened from the bot's menu button) instead of chat commands. It's a
+FastAPI backend (`webapp/backend/`, reusing `src/db.py`, `src/scheduler.py`,
+etc. directly — no logic is duplicated) serving a React + TypeScript frontend
+(`webapp/frontend/`). Push notifications stay chat-only; the Mini App is a
+pull UI you open, not a second notification channel.
+
+Auth is Telegram's `initData` (validated server-side against the bot token,
+same HMAC-SHA256 scheme Telegram documents), gated by the same
+`TELEGRAM_ALLOWED_USER_IDS` allowlist the bot uses.
+
+### Setup
+
+```bash
+docker compose build webapp
+docker compose up -d webapp
+```
+
+Set `WEBAPP_URL` in `.env` to a public HTTPS URL for the running `webapp`
+service, then restart `bot` — it sets that URL as the bot's persistent menu
+button ("Open App") on startup.
+
+**Local testing:** Telegram requires a public HTTPS URL — `localhost:8000`
+can't be opened from inside the Telegram client. Tunnel it (e.g.
+`ngrok http 8000`), set the tunnel URL as `WEBAPP_URL`, and restart `bot`. The
+backend and frontend can otherwise be exercised directly at
+`http://localhost:8000` in any browser (outside Telegram, without a tunnel) —
+`telegram.ts` no-ops safely when `window.Telegram` isn't the real client, so
+every screen loads, but Telegram-only chrome (native Back/Main buttons,
+theming) won't appear.
+
+### Frontend development
+
+```bash
+cd webapp/frontend
+npm install
+npm run dev   # proxies /api to a locally-running backend on :8000
+```
+
+Run the backend separately for hot-reload development:
+
+```bash
+pip install -r requirements-webapp.txt
+uvicorn webapp.backend.main:app --reload
+```

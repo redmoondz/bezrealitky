@@ -28,8 +28,8 @@ from aiogram.types import CallbackQuery, InputMediaPhoto, Message
 
 from src import db
 
-from .. import formatting
-from ..access import IsAllowed, denial_text
+from .. import formatting, i18n
+from ..access import IsAllowed, denial_text_for
 from ..keyboards import PAGE_SIZE, listing_keyboard, reaction_keyboard
 
 router = Router(name="browse")
@@ -53,25 +53,32 @@ def _load_liked_page(telegram_user_id: int, offset: int) -> tuple[int, dict | No
         return total, (rows[0] if rows else None), language
 
 
-def _record_reaction(telegram_user_id: int, listing_id: str, reaction: str) -> None:
+def _record_reaction(telegram_user_id: int, listing_id: str, reaction: str) -> str:
     with db.connect() as conn:
         db.ensure_schema(conn)
         db.record_reaction(conn, telegram_user_id, listing_id, reaction)
+        return db.get_user_language(conn, telegram_user_id)
 
 
 def _load_detail(listing_id: str, telegram_user_id: int) -> tuple[dict | None, str, str, bool]:
     with db.connect() as conn:
         db.ensure_schema(conn)
+        language = db.get_user_language(conn, telegram_user_id)
         row = db.fetch_listing(conn, listing_id)
         if row is None:
-            return None, "", "", True
-        language = db.get_user_language(conn, telegram_user_id)
+            return None, "", language, True
         row["score"] = db.get_relevance_score(conn, telegram_user_id, listing_id)
         description = row.get("description") or ""
         translated, translation_ok = db.get_or_translate_description(
             conn, listing_id, description, language
         )
     return row, translated, language, translation_ok
+
+
+def _user_language(telegram_user_id: int) -> str:
+    with db.connect() as conn:
+        db.ensure_schema(conn)
+        return db.get_user_language(conn, telegram_user_id)
 
 
 _CARD_PHOTO_COUNT = 4
@@ -121,7 +128,13 @@ async def _render_card(
     message_ids = await _send_card_photos(message, row.get("images") or [])
     caption = formatting.summary_caption(row, offset, total, language)
     keyboard = listing_keyboard(
-        row["listing_id"], row["url"], offset, total, nav_prefix=nav_prefix, show_reactions=show_reactions
+        row["listing_id"],
+        row["url"],
+        offset,
+        total,
+        language,
+        nav_prefix=nav_prefix,
+        show_reactions=show_reactions,
     )
     details = await message.answer(caption, parse_mode="HTML", reply_markup=keyboard)
     message_ids.append(details.message_id)
@@ -132,10 +145,7 @@ async def _send_page(message: Message, telegram_user_id: int, offset: int, state
     total, row, language = await asyncio.to_thread(_load_page, telegram_user_id, offset)
     await _clear_previous_card(message, state)
     if row is None:
-        await message.answer(
-            "No listings match your saved search yet. Try /parse to scrape now, "
-            "or /search to see what's saved."
-        )
+        await message.answer(i18n.t("no_listings_match", language))
         return
     await _render_card(message, row, offset, total, language, state)
 
@@ -146,7 +156,7 @@ async def _send_liked_page(
     total, row, language = await asyncio.to_thread(_load_liked_page, telegram_user_id, offset)
     await _clear_previous_card(message, state)
     if row is None:
-        await message.answer("You haven't liked any listings yet — like one from /list.")
+        await message.answer(i18n.t("no_liked_listings", language))
         return
     await _render_card(
         message, row, offset, total, language, state, nav_prefix="likedpage", show_reactions=False
@@ -158,7 +168,7 @@ async def _send_detail(target: Message, listing_id: str, telegram_user_id: int, 
         _load_detail, listing_id, telegram_user_id
     )
     if row is None:
-        await target.answer(f"No listing found with ID {listing_id}.")
+        await target.answer(i18n.t("listing_not_found", language, id=listing_id))
         return
     images = row.get("images") or []
     if len(images) > 1:
@@ -168,7 +178,7 @@ async def _send_detail(target: Message, listing_id: str, telegram_user_id: int, 
     await target.answer(
         formatting.detail_text(row, translated, language, translation_ok),
         parse_mode="HTML",
-        reply_markup=reaction_keyboard(listing_id, offset, prefix="reactd"),
+        reply_markup=reaction_keyboard(listing_id, offset, language, prefix="reactd"),
     )
     latitude, longitude = row.get("latitude"), row.get("longitude")
     if latitude is not None and longitude is not None:
@@ -191,21 +201,22 @@ async def list_listings(message: Message, state: FSMContext) -> None:
 
 @router.message(Command("list"))
 async def list_listings_denied(message: Message) -> None:
-    await message.answer(denial_text())
+    await message.answer(await denial_text_for(message.from_user.id))
 
 
 @router.message(Command("view"), IsAllowed())
 async def view_listing(message: Message) -> None:
     parts = (message.text or "").split(maxsplit=1)
     if len(parts) < 2:
-        await message.answer("Usage: /view <listing_id> — the ID shown on a listing card.")
+        language = await asyncio.to_thread(_user_language, message.from_user.id)
+        await message.answer(i18n.t("view_usage", language))
         return
     await _send_detail(message, parts[1].strip(), message.from_user.id, 0)
 
 
 @router.message(Command("view"))
 async def view_listing_denied(message: Message) -> None:
-    await message.answer(denial_text())
+    await message.answer(await denial_text_for(message.from_user.id))
 
 
 @router.message(Command("liked"), IsAllowed())
@@ -215,7 +226,7 @@ async def liked_listings(message: Message, state: FSMContext) -> None:
 
 @router.message(Command("liked"))
 async def liked_listings_denied(message: Message) -> None:
-    await message.answer(denial_text())
+    await message.answer(await denial_text_for(message.from_user.id))
 
 
 @router.callback_query(F.data.startswith("page:"), IsAllowed())
@@ -242,8 +253,8 @@ async def on_react(query: CallbackQuery, state: FSMContext) -> None:
     going.
     """
     _, reaction, offset_str, listing_id = query.data.split(":", 3)
-    await asyncio.to_thread(_record_reaction, query.from_user.id, listing_id, reaction)
-    await query.answer("❤️ Liked" if reaction == "like" else "👎 Passed")
+    language = await asyncio.to_thread(_record_reaction, query.from_user.id, listing_id, reaction)
+    await query.answer(i18n.t("reacted_liked" if reaction == "like" else "reacted_passed", language))
     if query.message:
         await _send_page(query.message, query.from_user.id, int(offset_str), state)
 
@@ -272,4 +283,4 @@ async def on_menu_browse(query: CallbackQuery, state: FSMContext) -> None:
     | (F.data == "menu:browse")
 )
 async def on_gated_callback_denied(query: CallbackQuery) -> None:
-    await query.answer(denial_text(), show_alert=True)
+    await query.answer(await denial_text_for(query.from_user.id), show_alert=True)

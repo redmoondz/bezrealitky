@@ -6,10 +6,14 @@ refused (with a setup hint) rather than left open to anyone who finds the bot.
 
 from __future__ import annotations
 
+import asyncio
+
 from aiogram.filters import BaseFilter
 from aiogram.types import CallbackQuery, Message
 
-from . import config
+from src import db
+
+from . import config, i18n
 
 
 class IsAllowed(BaseFilter):
@@ -18,10 +22,22 @@ class IsAllowed(BaseFilter):
         return bool(user) and user.id in config.ALLOWED_USER_IDS
 
 
-def denial_text() -> str:
+def denial_text(language: str = "en") -> str:
     if not config.ALLOWED_USER_IDS:
-        return (
-            "This bot isn't configured yet: set TELEGRAM_ALLOWED_USER_IDS in the "
-            "server's .env file to your Telegram user ID and restart the bot."
-        )
-    return "You're not authorized to use this bot."
+        return i18n.t("denial_setup", language)
+    return i18n.t("denial_not_authorized", language)
+
+
+def _user_language(telegram_user_id: int) -> str:
+    with db.connect() as conn:
+        db.ensure_schema(conn)
+        return db.get_user_language(conn, telegram_user_id)
+
+
+async def denial_text_for(telegram_user_id: int) -> str:
+    """The denial message in this user's own chosen language — looked up even
+    for gated commands, since language selection is open to everyone (see
+    module docstring), so an unauthorized user may well have already picked one.
+    """
+    language = await asyncio.to_thread(_user_language, telegram_user_id)
+    return denial_text(language)

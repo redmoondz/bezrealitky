@@ -1,0 +1,97 @@
+import { useQuery } from '@tanstack/react-query'
+import 'leaflet/dist/leaflet.css'
+import { MapContainer, Marker, TileLayer } from 'react-leaflet'
+import { useParams } from 'react-router-dom'
+
+import { api } from '../api'
+import { useBackButton } from '../hooks/useBackButton'
+import { formatFloor, formatPrice, petsLabel } from '../utils/listingFormat'
+
+const TOP_MATCH_THRESHOLD = 25
+
+export default function ListingDetail() {
+  const { listingId } = useParams<{ listingId: string }>()
+  useBackButton()
+
+  const detail = useQuery({
+    queryKey: ['listing', listingId],
+    queryFn: () => api.listing(listingId as string),
+    enabled: Boolean(listingId),
+  })
+
+  if (detail.isLoading) return <p>Loading…</p>
+  if (detail.isError || !detail.data) return <p>Listing not found.</p>
+
+  const row = detail.data
+
+  return (
+    <div className="stack">
+      {row.images.length > 0 ? (
+        <div className="detail-photo-carousel">
+          {row.images.map((src) => (
+            <img key={src} src={src} alt={row.name || 'Listing photo'} width={800} height={600} />
+          ))}
+        </div>
+      ) : (
+        <div className="listing-card__photos listing-card__photos--empty">🏠</div>
+      )}
+
+      <div className="stack" style={{ gap: 4 }}>
+        {row.score >= TOP_MATCH_THRESHOLD && <span className="badge">⭐ Top match</span>}
+        <h1 className="listing-card__name">{row.name || 'Untitled listing'}</h1>
+        <div className="listing-card__price">{formatPrice(row.total_price, row.currency)}</div>
+        <div className="listing-card__meta">
+          Deposit: {formatPrice(row.refundable_deposit, row.currency)}
+        </div>
+        <div className="listing-card__meta">
+          {row.area != null ? `${row.area} m²` : '—'} · {row.format || '—'} · Floor {formatFloor(row)}
+        </div>
+        <div className="listing-card__meta">Furnished: {row.fully_furnished || '—'}</div>
+        <div className="listing-card__meta">
+          🐾 Pets: {petsLabel(row.pets_friendly)} · 📍 {row.location || '—'}
+        </div>
+        {row.tags.length > 0 && (
+          <div className="row row--wrap">
+            {row.tags.map((tag) => (
+              <span key={tag} className="chip">
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {row.description && (
+        <div className="card">
+          {!row.translation_ok && (
+            <p className="listing-card__meta">
+              ⚠️ Translation temporarily unavailable — showing the original text.
+            </p>
+          )}
+          <p className="detail-description">{row.description}</p>
+        </div>
+      )}
+
+      {row.latitude != null && row.longitude != null && (
+        <div className="map-frame">
+          <MapContainer
+            center={[row.latitude, row.longitude]}
+            zoom={15}
+            style={{ height: '100%', width: '100%' }}
+            scrollWheelZoom={false}
+          >
+            <TileLayer
+              attribution="&copy; OpenStreetMap contributors"
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+            <Marker position={[row.latitude, row.longitude]} />
+          </MapContainer>
+        </div>
+      )}
+
+      <a className="btn btn--primary btn--block" href={row.url} target="_blank" rel="noreferrer">
+        Open on Bezrealitky
+      </a>
+    </div>
+  )
+}

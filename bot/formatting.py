@@ -8,7 +8,11 @@ from src.scoring import TOP_MATCH_THRESHOLD
 
 from . import i18n
 
-_PETS_LABELS = {True: "Yes", False: "No", None: "Unknown"}
+_PETS_LABEL_KEYS = {True: "pets_label_yes", False: "pets_label_no", None: "pets_label_unknown"}
+
+
+def _pets_label(language: str, value) -> str:
+    return i18n.t(_PETS_LABEL_KEYS[value], language)
 
 
 def _tags_line(language: str, row: dict) -> str:
@@ -18,12 +22,12 @@ def _tags_line(language: str, row: dict) -> str:
     return f"\n🏷 {'   '.join(tags)}\n" if tags else ""
 
 
-def _top_match_badge(row: dict) -> str:
+def _top_match_badge(row: dict, language: str) -> str:
     """A visible badge, not the raw point total — the score itself is an
     internal ranking detail, not something to show a user as "42 points".
     """
     score = row.get("score") or 0
-    return "⭐ <b>Top match</b>\n" if score >= TOP_MATCH_THRESHOLD else ""
+    return f"⭐ <b>{i18n.t('top_match_badge', language)}</b>\n" if score >= TOP_MATCH_THRESHOLD else ""
 
 
 def _floor_text(row: dict) -> str:
@@ -58,14 +62,17 @@ def summary_caption(row: dict, offset: int, total: int, language: str = "en") ->
     are capped at 1024 characters, so the full description lives in /view only).
     """
     area = f"{row['area']} m²" if row.get("area") is not None else "—"
-    pets = _PETS_LABELS.get(row.get("pets_friendly"))
+    pets = _pets_label(language, row.get("pets_friendly"))
+    name = escape(row.get("name") or i18n.t("untitled_listing", language))
     return (
-        f"{_top_match_badge(row)}"
-        f"<b>{escape(row.get('name') or 'Untitled listing')}</b>\n"
-        f"💰 Rent: {_price_text(row)}   💵 Deposit: {_deposit_text(row)}\n"
+        f"{_top_match_badge(row, language)}"
+        f"<b>{name}</b>\n"
+        f"💰 {i18n.t('rent_label', language)}: {_price_text(row)}   "
+        f"💵 {i18n.t('deposit_label', language)}: {_deposit_text(row)}\n"
         f"📐 {area}   🛏 {escape(row.get('format') or '—')}\n"
-        f"🛋 Furnished: {_furnished_text(row)}\n"
-        f"🪜 Floor {_floor_text(row)}   🐾 Pets: {pets}\n"
+        f"🛋 {i18n.t('furnished_label', language)}: {_furnished_text(row)}\n"
+        f"🪜 {i18n.t('floor_label', language)} {_floor_text(row)}   "
+        f"🐾 {i18n.t('pets_field_label', language)}: {pets}\n"
         f"📍 {escape(row.get('location') or '—')}\n"
         f"{_tags_line(language, row)}"
         f"\n{offset + 1}/{total}"
@@ -81,17 +88,20 @@ def detail_text(row: dict, description: str, language: str = "en", translation_o
     expandable quote (Telegram message text is capped at 4096 chars).
     """
     area = f"{row['area']} m²" if row.get("area") is not None else "—"
-    pets = _PETS_LABELS.get(row.get("pets_friendly"))
+    pets = _pets_label(language, row.get("pets_friendly"))
+    name = escape(row.get("name") or i18n.t("untitled_listing", language))
     header = (
-        f"{_top_match_badge(row)}"
-        f"<b>{escape(row.get('name') or 'Untitled listing')}</b>\n"
-        f"💰 Rent: {_price_text(row)}   💵 Deposit: {_deposit_text(row)}\n"
+        f"{_top_match_badge(row, language)}"
+        f"<b>{name}</b>\n"
+        f"💰 {i18n.t('rent_label', language)}: {_price_text(row)}   "
+        f"💵 {i18n.t('deposit_label', language)}: {_deposit_text(row)}\n"
         f"📐 {area}   🛏 {escape(row.get('format') or '—')}\n"
-        f"🛋 Furnished: {_furnished_text(row)}\n"
-        f"🪜 Floor {_floor_text(row)}   🐾 Pets: {pets}\n"
+        f"🛋 {i18n.t('furnished_label', language)}: {_furnished_text(row)}\n"
+        f"🪜 {i18n.t('floor_label', language)} {_floor_text(row)}   "
+        f"🐾 {i18n.t('pets_field_label', language)}: {pets}\n"
         f"📍 {escape(row.get('location') or '—')}\n"
         f"{_tags_line(language, row)}"
-        f"🔗 <a href=\"{escape(row.get('url') or '')}\">Open on Bezrealitky</a>\n"
+        f"🔗 <a href=\"{escape(row.get('url') or '')}\">{i18n.t('open_on_bezrealitky', language)}</a>\n"
     )
     if not description:
         return header[:_MESSAGE_LIMIT]

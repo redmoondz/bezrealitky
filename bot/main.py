@@ -6,6 +6,7 @@ import asyncio
 import logging
 
 from aiogram import Bot, Dispatcher
+from aiogram.types import MenuButtonWebApp, WebAppInfo
 
 from . import config, notify_loop
 from .handlers import browse, charts, parser, start
@@ -39,6 +40,12 @@ async def main() -> None:
 
     bot = Bot(token=config.BOT_TOKEN)
     await bot.set_my_commands(BOT_COMMANDS)
+    if config.WEBAPP_URL:
+        await bot.set_chat_menu_button(
+            menu_button=MenuButtonWebApp(text="Open App", web_app=WebAppInfo(url=config.WEBAPP_URL))
+        )
+    else:
+        LOGGER.info("WEBAPP_URL is not set; the bot's menu button will not open the Mini App")
     dispatcher = build_dispatcher()
 
     notify_task = asyncio.create_task(notify_loop.run(bot))

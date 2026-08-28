@@ -28,33 +28,37 @@ def language_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def onboarding_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="▶️ Use the default search", callback_data="onboarding:skip")]
-        ]
-    )
-
-
-def pets_preference_keyboard() -> InlineKeyboardMarkup:
+def onboarding_keyboard(language: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="🐾 Yes", callback_data="pets_pref:yes"),
-                InlineKeyboardButton(text="🚫 No", callback_data="pets_pref:no"),
-            ],
-            [InlineKeyboardButton(text="⏭ Skip", callback_data="pets_pref:skip")],
+                InlineKeyboardButton(
+                    text=i18n.t("use_default_search_button", language), callback_data="onboarding:skip"
+                )
+            ]
         ]
     )
 
 
-def skip_keyboard(callback_data: str) -> InlineKeyboardMarkup:
+def pets_preference_keyboard(language: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="⏭ Skip", callback_data=callback_data)]]
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text=i18n.t("pets_yes_button", language), callback_data="pets_pref:yes"),
+                InlineKeyboardButton(text=i18n.t("pets_no_button", language), callback_data="pets_pref:no"),
+            ],
+            [InlineKeyboardButton(text=i18n.t("skip_button", language), callback_data="pets_pref:skip")],
+        ]
     )
 
 
-def reaction_keyboard(listing_id: str, offset: int, prefix: str = "react") -> InlineKeyboardMarkup:
+def skip_keyboard(callback_data: str, language: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text=i18n.t("skip_button", language), callback_data=callback_data)]]
+    )
+
+
+def reaction_keyboard(listing_id: str, offset: int, language: str, prefix: str = "react") -> InlineKeyboardMarkup:
     """A standalone Like/Dislike row — used both as /list's swipe-card row (via
     :func:`listing_keyboard`, ``prefix="react"``) and on its own on the /view
     detail card (``prefix="reactd"``, since that's a distinct callback so its
@@ -65,10 +69,10 @@ def reaction_keyboard(listing_id: str, offset: int, prefix: str = "react") -> In
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="👎 Pass", callback_data=f"{prefix}:dislike:{offset}:{listing_id}"
+                    text=i18n.t("pass_button", language), callback_data=f"{prefix}:dislike:{offset}:{listing_id}"
                 ),
                 InlineKeyboardButton(
-                    text="❤️ Like", callback_data=f"{prefix}:like:{offset}:{listing_id}"
+                    text=i18n.t("like_button", language), callback_data=f"{prefix}:like:{offset}:{listing_id}"
                 ),
             ]
         ]
@@ -80,6 +84,7 @@ def listing_keyboard(
     url: str,
     offset: int,
     total: int,
+    language: str,
     nav_prefix: str = "page",
     show_reactions: bool = True,
 ) -> InlineKeyboardMarkup:
@@ -92,42 +97,34 @@ def listing_keyboard(
     if offset > 0:
         nav_row.append(
             InlineKeyboardButton(
-                text="◂ Prev", callback_data=f"{nav_prefix}:{max(0, offset - PAGE_SIZE)}"
+                text=i18n.t("prev_button", language), callback_data=f"{nav_prefix}:{max(0, offset - PAGE_SIZE)}"
             )
         )
     if offset + PAGE_SIZE < total:
         nav_row.append(
-            InlineKeyboardButton(text="Next ▸", callback_data=f"{nav_prefix}:{offset + PAGE_SIZE}")
+            InlineKeyboardButton(
+                text=i18n.t("next_button", language), callback_data=f"{nav_prefix}:{offset + PAGE_SIZE}"
+            )
         )
     rows = []
     if nav_row:
         rows.append(nav_row)
     if show_reactions:
-        rows.append(reaction_keyboard(listing_id, offset).inline_keyboard[0])
+        rows.append(reaction_keyboard(listing_id, offset, language).inline_keyboard[0])
     rows.append(
         [
             InlineKeyboardButton(
-                text="Full details & photos", callback_data=f"view:{offset}:{listing_id}"
+                text=i18n.t("full_details_button", language), callback_data=f"view:{offset}:{listing_id}"
             ),
-            InlineKeyboardButton(text="Open listing", url=url),
+            InlineKeyboardButton(text=i18n.t("open_listing_button", language), url=url),
         ]
     )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-CHART_OPTIONS = [
-    ("area_hist", "Area distribution"),
-    ("price_hist", "Price distribution"),
-    ("price_per_unit_hist", "Price per m² distribution"),
-    ("price_vs_area", "Price vs. area"),
-    ("format_pie", "By layout"),
-    ("pets_pie", "By pets_friendly"),
-]
-
-
-def charts_keyboard() -> InlineKeyboardMarkup:
+def charts_keyboard(language: str) -> InlineKeyboardMarkup:
     rows = [
         [InlineKeyboardButton(text=label, callback_data=f"chart:{key}")]
-        for key, label in CHART_OPTIONS
+        for key, label in i18n.chart_options(language)
     ]
     return InlineKeyboardMarkup(inline_keyboard=rows)

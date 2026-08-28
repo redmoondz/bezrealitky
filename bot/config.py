@@ -13,6 +13,10 @@ BOT_TOKEN = os.environ.get("TELEGRAM_BOT_API", "").strip()
 
 NOTIFY_POLL_SECONDS = int(os.environ.get("NOTIFY_POLL_SECONDS", "600"))
 
+# Public HTTPS URL of the Mini App (webapp/), if deployed — set as the bot's
+# persistent menu button in main.py. Empty means no menu button is set.
+WEBAPP_URL = os.environ.get("WEBAPP_URL", "").strip()
+
 # More new matches than this in one sync (a first-time search, or a filter
 # change that suddenly widens the results) collapse into a single summary
 # notification instead of one message per listing.

@@ -53,7 +53,7 @@ async def _notify_one(bot: Bot, telegram_user_id: int, row: dict, language: str)
     translated, translation_ok = await asyncio.to_thread(
         _translated_description, row["listing_id"], description, language
     )
-    text = "🆕 <b>New match in your saved search</b>\n\n" + formatting.detail_text(
+    text = i18n.t("new_match_header", language) + formatting.detail_text(
         row, translated, language, translation_ok
     )
     images = row.get("images") or []

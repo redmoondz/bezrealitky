@@ -78,6 +78,28 @@ services:
         condition: service_started
     restart: unless-stopped
 
+  # The same functionality as `bot`, as a Telegram Mini App (a web UI opened
+  # from the bot's menu button) instead of chat commands. See webapp/.
+  webapp:
+    build:
+      context: .
+      dockerfile: Dockerfile.webapp
+    image: bezrealitky-webapp:local
+    env_file: .env
+    environment:
+      POSTGRES_HOST: db
+      TRANSLATE_URL: http://translate:5000/translate
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./config:/app/config
+    depends_on:
+      db:
+        condition: service_healthy
+      translate:
+        condition: service_started
+    restart: unless-stopped
+
 volumes:
   pgdata:
   translate_data:
