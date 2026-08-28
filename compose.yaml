@@ -5,6 +5,11 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-bezrealitky}
       POSTGRES_USER: ${POSTGRES_USER:-bezrealitky}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    # Exposed on 5433, not 5432 — this machine already has another project's
+    # Postgres bound to the host's 5432 (see analytic-model-etl), so a GUI
+    # client connects here via localhost:5433 instead.
+    ports:
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
