@@ -95,9 +95,16 @@ For continuous use, `docker compose` also runs:
 
 - **`db`** — Postgres, the system of record. A shared, deduped cache of scraped
   ads (`listings`), plus per-Telegram-user state (`bot_users`,
-  `user_listing_relevance`).
+  `user_listing_relevance`). Published on host port `5433` (not the default
+  `5432`, to leave room for another local Postgres) so a GUI client can
+  connect directly at `localhost:5433`; every other service reaches it over
+  the internal `db:5432` hostname regardless.
 - **`translate`** — a self-hosted [LibreTranslate](https://libretranslate.com)
-  instance (free, no API key) used to translate descriptions.
+  instance (free, no API key) used to translate descriptions. Source language
+  is auto-detected per description; if that detection looks wrong (the result
+  just echoes the input back unchanged), it retries once assuming Czech — the
+  site's near-universal source language — before giving up and showing the
+  original text with a "translation unavailable" note (`src/translate.py`).
 - **`scheduler`** — the same image as `scraper`, just started with a different
   entrypoint (`python -m src.scheduler`): every `SCRAPE_INTERVAL_HOURS` (default
   2), it re-runs **every registered Telegram user's own saved search** and syncs
@@ -145,14 +152,18 @@ docker compose up -d scheduler bot
 `TELEGRAM_ALLOWED_USER_IDS` gates every command except `/start`/`/language`
 (picking a language is harmless) — it **fails closed**: leave it empty and the
 bot refuses every gated command with a setup hint instead of defaulting open.
+`TELEGRAM_ADMIN_USER_IDS` (a subset of the above) is optional and only gates
+the Mini App's Admin tab — see [Admin](#admin) below.
 
 ### Bot commands
 
 | Command | What it does |
 |---|---|
-| `/start`, `/language` | Pick the language listing descriptions get translated into |
+| `/start`, `/language` | Pick the bot's language — menus, messages, and listing descriptions |
+| `/help` | Show all available commands |
 | `/list` | Paginate your saved search's matching listings (photo, price, area, floor, pets, link) |
 | `/view <listing_id>` | Full detail + all photos for one listing |
+| `/liked` | Browse the listings you've liked |
 | `/search` | Show your current saved search URL |
 | `/parse` | Run the scraper now with your saved search |
 | `/parse_custom <flags>` | Update *your* saved search with CLI-style flags and run it now |
@@ -160,9 +171,20 @@ bot refuses every gated command with a setup hint instead of defaulting open.
 | `/charts` | Area/price/price-per-m² distributions, price-vs-area, and layout/pets_friendly breakdowns for your saved search |
 
 New listings that become relevant to a user's saved search are pushed to them
-automatically (their own Telegram chat) — checked every `NOTIFY_POLL_SECONDS`
-(default 10 min) by the bot process, independent of the scheduler's own 2-hour
-cadence.
+automatically (their own Telegram chat, with the same Like/Dislike buttons as
+`/list`) — checked every `NOTIFY_POLL_SECONDS` (default 10 min) by the bot
+process, independent of the scheduler's own 2-hour cadence.
+
+### Language
+
+Everyone picks one of four interface languages via `/start` or `/language` —
+English, Czech, Russian, or Ukrainian. From then on *everything* the bot
+sends is in that language: onboarding prompts, buttons, errors, `/help`, and
+even Telegram's own "/" command menu (re-registered per chat right after a
+language pick) — not just listing descriptions (`bot/i18n.py`). Listing
+descriptions themselves go through the `translate` service separately (see
+above) and are cached per `(listing, language)`, so a repeat view — any user,
+any number of times — is a plain cache read, never another translation call.
 
 ## Mini App (`webapp/`)
 
@@ -173,6 +195,10 @@ FastAPI backend (`webapp/backend/`, reusing `src/db.py`, `src/scheduler.py`,
 etc. directly — no logic is duplicated) serving a React + TypeScript frontend
 (`webapp/frontend/`). Push notifications stay chat-only; the Mini App is a
 pull UI you open, not a second notification channel.
+
+Unlike the bot's static chart PNGs, the Mini App's charts are interactive
+(Recharts) — tapping a point on the price-vs-area scatter plot opens that
+listing on Bezrealitky directly.
 
 Auth is Telegram's `initData` (validated server-side against the bot token,
 same HMAC-SHA256 scheme Telegram documents), gated by the same
@@ -212,3 +238,20 @@ Run the backend separately for hot-reload development:
 pip install -r requirements-webapp.txt
 uvicorn webapp.backend.main:app --reload
 ```
+
+### Admin
+
+Telegram IDs listed in `TELEGRAM_ADMIN_USER_IDS` (a subset of
+`TELEGRAM_ALLOWED_USER_IDS`) see an extra Admin tab in the Mini App:
+
+- **Stats** — tracked/onboarded/registered user counts and total listings cached.
+- **Users** — every Telegram account the bot has ever seen, most-recently-active
+  first, with an autocomplete search by name/username as well as by ID.
+- **Notify** — send a plain-text message to one specific user or broadcast to
+  every registered user, with a confirm step before it actually sends.
+
+Every `/api/admin/*` endpoint is gated separately from the rest of the app
+(`get_current_admin_user`, `webapp/backend/telegram_auth.py`) — being in
+`TELEGRAM_ALLOWED_USER_IDS` alone isn't enough. Sending goes through a direct
+Telegram Bot API HTTP call (`webapp/backend/telegram_send.py`) rather than
+aiogram, so the webapp process's dependency footprint doesn't change.
