@@ -155,6 +155,11 @@ bot refuses every gated command with a setup hint instead of defaulting open.
 `TELEGRAM_ADMIN_USER_IDS` (a subset of the above) is optional and only gates
 the Mini App's Admin tab — see [Admin](#admin) below.
 
+Set `TELEGRAM_PUBLIC_ACCESS=true` to flip the allowlist off and open every
+gated command to any Telegram user — a toggle for making the bot public.
+Leave it unset (or anything other than `true`) and access stays closed to
+`TELEGRAM_ALLOWED_USER_IDS`, which is the default.
+
 ### Bot commands
 
 | Command | What it does |

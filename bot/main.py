@@ -32,7 +32,12 @@ async def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     if not config.BOT_TOKEN:
         raise SystemExit("TELEGRAM_BOT_API is not set")
-    if not config.ALLOWED_USER_IDS:
+    if config.PUBLIC_ACCESS:
+        LOGGER.warning(
+            "TELEGRAM_PUBLIC_ACCESS is on — every gated command is open to any Telegram "
+            "user, regardless of TELEGRAM_ALLOWED_USER_IDS."
+        )
+    elif not config.ALLOWED_USER_IDS:
         LOGGER.warning(
             "TELEGRAM_ALLOWED_USER_IDS is empty — every gated command will refuse to run "
             "until it's set."

@@ -2,6 +2,9 @@
 
 Fails closed: if ``TELEGRAM_ALLOWED_USER_IDS`` is empty, every gated command is
 refused (with a setup hint) rather than left open to anyone who finds the bot.
+Set ``TELEGRAM_PUBLIC_ACCESS=true`` to flip this off and open every gated
+command to any Telegram user, regardless of the allowlist; leaving it unset
+keeps the default closed behavior.
 """
 
 from __future__ import annotations
@@ -18,6 +21,8 @@ from . import config, i18n
 
 class IsAllowed(BaseFilter):
     async def __call__(self, event: Message | CallbackQuery) -> bool:
+        if config.PUBLIC_ACCESS:
+            return bool(event.from_user)
         user = event.from_user
         return bool(user) and user.id in config.ALLOWED_USER_IDS
 

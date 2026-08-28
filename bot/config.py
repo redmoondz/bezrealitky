@@ -46,8 +46,17 @@ def _parse_id_list(value: str) -> set[int]:
     return ids
 
 
+def _parse_bool(value: str) -> bool:
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 ALLOWED_USER_IDS = _parse_id_list(os.environ.get("TELEGRAM_ALLOWED_USER_IDS", ""))
 
 # Subset of ALLOWED_USER_IDS that additionally sees the Mini App's Admin tab
 # (stats, user list, manual notifications) — see webapp/backend/routers/admin.py.
 ADMIN_USER_IDS = _parse_id_list(os.environ.get("TELEGRAM_ADMIN_USER_IDS", ""))
+
+# Toggle to open every gated bot command to any Telegram user, bypassing
+# ALLOWED_USER_IDS entirely. Unset (or any value other than 1/true/yes/on)
+# keeps the default: access stays closed to the allowlist.
+PUBLIC_ACCESS = _parse_bool(os.environ.get("TELEGRAM_PUBLIC_ACCESS", ""))
