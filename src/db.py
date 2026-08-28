@@ -384,7 +384,11 @@ def get_or_translate_description(
         row = cursor.fetchone()
     translations = dict(row["description_translations"]) if row and row["description_translations"] else {}
     cached = translations.get(language)
-    if cached:
+    # A cached value identical to the raw source isn't a real translation — most
+    # likely a stale result from a since-fixed language-detection bug (see
+    # src/translate.py) — so treat it as a miss and retry instead of serving a
+    # known-untranslated description forever.
+    if cached and cached != description:
         return cached, True
     translated, ok = translate_description(description, language)
     if ok:

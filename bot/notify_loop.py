@@ -18,7 +18,7 @@ from aiogram import Bot
 from src import db
 
 from . import config, formatting, i18n
-from .keyboards import batch_summary_keyboard
+from .keyboards import batch_summary_keyboard, reaction_keyboard
 
 LOGGER = logging.getLogger(__name__)
 
@@ -63,7 +63,15 @@ async def _notify_one(bot: Bot, telegram_user_id: int, row: dict, language: str)
         # together, matching /view's "Full details" card.
         if images:
             await bot.send_photo(telegram_user_id, images[0])
-        await bot.send_message(telegram_user_id, text, parse_mode="HTML")
+        await bot.send_message(
+            telegram_user_id,
+            text,
+            parse_mode="HTML",
+            # Offset 0 since a notification isn't tied to any /list pagination
+            # position — reacting hands the user into the /list queue from the
+            # top, same as liking/disliking from /view's detail card does.
+            reply_markup=reaction_keyboard(row["listing_id"], 0, language, prefix="reactd"),
+        )
         latitude, longitude = row.get("latitude"), row.get("longitude")
         if latitude is not None and longitude is not None:
             # Same native Telegram map bubble /view sends — see its comment.

@@ -33,6 +33,31 @@ _TIMEOUT_SECONDS = 25
 _MAX_ATTEMPTS = 2
 _RETRY_DELAY_SECONDS = 1.5
 
+# Bezrealitky is a Czech site; almost every description that isn't in English
+# is Czech — but occasionally Slovak (close enough to Czech to read, distinct
+# enough to trip up language ID). LibreTranslate's auto-detect sometimes scores
+# such text as English with ~0 confidence, then "translates" it by echoing it
+# straight back untranslated. Falling back to this assumed source lets the
+# (very similar) Czech model produce a real translation instead.
+_FALLBACK_SOURCE = "cs"
+
+
+def _request(text: str, target_language: str, source: str) -> tuple[str | None, str | None]:
+    """One LibreTranslate call. Returns ``(translated_text, detected_language)``,
+    either of which may be ``None`` if the response didn't include it. Network
+    and HTTP errors propagate to the caller's retry loop.
+    """
+    response = requests.post(
+        TRANSLATE_URL,
+        json={"q": text, "source": source, "target": target_language, "format": "text"},
+        timeout=_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+    body = response.json()
+    translated = body.get("translatedText")
+    detected = (body.get("detectedLanguage") or {}).get("language")
+    return (translated if isinstance(translated, str) else None), detected
+
 
 def translate_description(text: str, target_language: str) -> tuple[str, bool]:
     """Translate text. Returns ``(text_to_show, translation_succeeded)``.
@@ -48,19 +73,19 @@ def translate_description(text: str, target_language: str) -> tuple[str, bool]:
     last_exc: Exception | None = None
     for attempt in range(_MAX_ATTEMPTS):
         try:
-            response = requests.post(
-                TRANSLATE_URL,
-                json={
-                    "q": text,
-                    "source": "auto",
-                    "target": target_language,
-                    "format": "text",
-                },
-                timeout=_TIMEOUT_SECONDS,
-            )
-            response.raise_for_status()
-            translated = response.json().get("translatedText")
-            return (translated, True) if isinstance(translated, str) and translated else (text, True)
+            translated, detected = _request(text, target_language, source="auto")
+            if not translated:
+                return text, True
+            if translated.strip() == text.strip() and detected != target_language:
+                # Auto-detect likely misread the source and the model just
+                # echoed the input back rather than translating it — a real
+                # "already in the target language" case would have detected
+                # as target_language above, so this is worth one retry.
+                retried, _ = _request(text, target_language, source=_FALLBACK_SOURCE)
+                if retried and retried.strip() != text.strip():
+                    return retried, True
+                return text, False
+            return translated, True
         except (requests.RequestException, ValueError) as exc:
             last_exc = exc
             if attempt + 1 < _MAX_ATTEMPTS:
