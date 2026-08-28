@@ -29,9 +29,11 @@ from psycopg.types.json import Json
 try:
     from .scoring import compute_score
     from .scraper import Listing
+    from .translate import translate_description
 except ImportError:  # Support: python3 src/db.py
     from scoring import compute_score  # type: ignore[no-redef]
     from scraper import Listing  # type: ignore[no-redef]
+    from translate import translate_description  # type: ignore[no-redef]
 
 LOGGER = logging.getLogger(__name__)
 
@@ -135,6 +137,12 @@ CREATE TABLE IF NOT EXISTS listings (
     -- can query tag frequency/combinations without scanning 13 columns, e.g.
     -- SELECT jsonb_array_elements_text(tags), count(*) FROM listings GROUP BY 1.
     tags JSONB NOT NULL DEFAULT '[]',
+    -- {language_code: translated_text}. Populated once per (listing, language) —
+    -- by sync_user_listings for whoever's search just found it, and lazily by
+    -- get_or_translate_description for any other language a viewer needs —
+    -- and never re-translated after that, since the shared cache means every
+    -- other user (or repeat view) in that language reads it back for free.
+    description_translations JSONB NOT NULL DEFAULT '{}',
     first_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -159,6 +167,7 @@ ALTER TABLE listings ADD COLUMN IF NOT EXISTS quiet_surroundings BOOLEAN;
 ALTER TABLE listings ADD COLUMN IF NOT EXISTS garage BOOLEAN;
 ALTER TABLE listings ADD COLUMN IF NOT EXISTS english_speaking BOOLEAN;
 ALTER TABLE listings ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS description_translations JSONB NOT NULL DEFAULT '{}';
 
 -- Every Telegram account that has ever messaged the bot (recorded by a
 -- dispatcher-wide middleware on first contact) — independent of ``bot_users``,
@@ -351,6 +360,38 @@ def ensure_bot_user(conn: psycopg.Connection, telegram_user_id: int) -> None:
             )
 
 
+def get_or_translate_description(
+    conn: psycopg.Connection, listing_id: str, description: str, language: str
+) -> tuple[str, bool]:
+    """Read this listing's cached translation for ``language``; translate and
+    persist it if it isn't cached yet. Returns ``(text_to_show, translation_ok)``
+    exactly like :func:`src.translate.translate_description` — once a language
+    is cached for a listing, every later view (any user, any number of times)
+    is a plain cache read, never another network call.
+    """
+    if not description:
+        return description, True
+    with conn.cursor() as cursor:
+        cursor.execute(
+            "SELECT description_translations FROM listings WHERE listing_id = %s", (listing_id,)
+        )
+        row = cursor.fetchone()
+    translations = dict(row["description_translations"]) if row and row["description_translations"] else {}
+    cached = translations.get(language)
+    if cached:
+        return cached, True
+    translated, ok = translate_description(description, language)
+    if ok:
+        translations[language] = translated
+        with conn.transaction():
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "UPDATE listings SET description_translations = %s WHERE listing_id = %s",
+                    (Json(translations), listing_id),
+                )
+    return translated, ok
+
+
 def sync_user_listings(
     conn: psycopg.Connection, telegram_user_id: int, listings: Iterable[Listing]
 ) -> dict:
@@ -361,8 +402,14 @@ def sync_user_listings(
     ``is_relevant`` for *them* — other users' relevance is untouched. This is the
     entire "saved search changed" lifecycle: a user's relevance is always
     recomputed from their current search's live results, never diffed.
+
+    Every newly-synced listing's description is also translated into this
+    user's own language and cached (see :func:`get_or_translate_description`)
+    before this function returns — translation happens up front, at sync time,
+    not the first time someone happens to view the listing.
     """
     ensure_bot_user(conn, telegram_user_id)
+    language = get_user_language(conn, telegram_user_id)
     rows = [row_from_listing(listing) for listing in listings]
     preferences = get_user_preferences(conn, telegram_user_id)
     with conn.transaction():
@@ -382,6 +429,8 @@ def sync_user_listings(
                         "score": compute_score(row, preferences),
                     },
                 )
+    for row in rows:
+        get_or_translate_description(conn, row["listing_id"], row["description"], language)
     LOGGER.info("Synced %d listings for user %s (now relevant)", len(rows), telegram_user_id)
     return {"synced": len(rows)}
 

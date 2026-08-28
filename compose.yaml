@@ -50,11 +50,14 @@ services:
     env_file: .env
     environment:
       POSTGRES_HOST: db
+      TRANSLATE_URL: http://translate:5000/translate
     volumes:
       - ./config:/app/config
     depends_on:
       db:
         condition: service_healthy
+      translate:
+        condition: service_started
     restart: unless-stopped
 
   bot:

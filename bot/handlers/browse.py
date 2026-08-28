@@ -17,7 +17,6 @@ from src import db
 from .. import formatting
 from ..access import IsAllowed, denial_text
 from ..keyboards import PAGE_SIZE, listing_keyboard
-from ..translate import translate_description
 
 router = Router(name="browse")
 
@@ -39,11 +38,10 @@ def _load_detail(listing_id: str, telegram_user_id: int) -> tuple[dict | None, s
             return None, "", "", True
         language = db.get_user_language(conn, telegram_user_id)
         row["score"] = db.get_relevance_score(conn, telegram_user_id, listing_id)
-    description = row.get("description") or ""
-    if description:
-        translated, translation_ok = translate_description(description, language)
-    else:
-        translated, translation_ok = "", True
+        description = row.get("description") or ""
+        translated, translation_ok = db.get_or_translate_description(
+            conn, listing_id, description, language
+        )
     return row, translated, language, translation_ok
 
 

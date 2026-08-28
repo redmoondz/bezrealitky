@@ -19,7 +19,6 @@ from src import db
 
 from . import config, formatting, i18n
 from .keyboards import batch_summary_keyboard
-from .translate import translate_description
 
 LOGGER = logging.getLogger(__name__)
 
@@ -43,14 +42,17 @@ def _mark_notified(telegram_user_id: int, listing_ids: list[str]) -> None:
         db.mark_notified(conn, telegram_user_id, listing_ids)
 
 
+def _translated_description(listing_id: str, description: str, language: str) -> tuple[str, bool]:
+    with db.connect() as conn:
+        db.ensure_schema(conn)
+        return db.get_or_translate_description(conn, listing_id, description, language)
+
+
 async def _notify_one(bot: Bot, telegram_user_id: int, row: dict, language: str) -> None:
     description = row.get("description") or ""
-    if description:
-        translated, translation_ok = await asyncio.to_thread(
-            translate_description, description, language
-        )
-    else:
-        translated, translation_ok = "", True
+    translated, translation_ok = await asyncio.to_thread(
+        _translated_description, row["listing_id"], description, language
+    )
     text = "🆕 <b>New match in your saved search</b>\n\n" + formatting.detail_text(
         row, translated, language, translation_ok
     )

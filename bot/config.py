@@ -11,8 +11,6 @@ load_dotenv()
 # Matches the variable name already used in this project's .env file.
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_API", "").strip()
 
-TRANSLATE_URL = os.environ.get("TRANSLATE_URL", "http://translate:5000/translate")
-
 NOTIFY_POLL_SECONDS = int(os.environ.get("NOTIFY_POLL_SECONDS", "600"))
 
 # More new matches than this in one sync (a first-time search, or a filter

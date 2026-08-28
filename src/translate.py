@@ -4,18 +4,23 @@ Descriptions on Bezrealitky are usually Czech but not always — some are writte
 directly in English — so the source language is auto-detected per description
 rather than assumed, letting each Telegram user read them in whichever language
 they picked with /start or /language, without depending on a paid translation API.
+
+Lives in ``src`` (not ``bot``) because the scheduler now pre-translates and
+caches descriptions at scrape time too (see ``db.get_or_translate_description``),
+not just the bot process — this module has no Telegram-specific dependencies.
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import time
 
 import requests
 
-from . import config
-
 LOGGER = logging.getLogger(__name__)
+
+TRANSLATE_URL = os.environ.get("TRANSLATE_URL", "http://translate:5000/translate")
 
 # LibreTranslate runs CPU-only inference behind a small, fixed worker pool
 # (see compose.yaml) — a single request can genuinely take longer than the
@@ -44,7 +49,7 @@ def translate_description(text: str, target_language: str) -> tuple[str, bool]:
     for attempt in range(_MAX_ATTEMPTS):
         try:
             response = requests.post(
-                config.TRANSLATE_URL,
+                TRANSLATE_URL,
                 json={
                     "q": text,
                     "source": "auto",
