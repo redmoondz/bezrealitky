@@ -106,27 +106,31 @@ _TEXTS: dict[str, dict[str, str]] = {
     "budget_prompt": {
         "en": (
             "💰 What's your monthly budget, <b>all costs included</b> (rent + service + "
-            "utility charges), in <b>{currency}</b>? Send a plain number (e.g. 25000), "
+            "utility charges), in <b>{currency}</b>? Just send the number (digits only), "
             "or tap Skip.\n\n"
-            "This only affects how listings are ranked for you — it won't hide anything."
+            "This doesn't filter anything out — listings above your budget still show up, "
+            "just ranked lower, so the ones within budget surface first."
         ),
         "cs": (
             "💰 Jaký je váš měsíční rozpočet <b>včetně veškerých poplatků</b> (nájem + "
-            "služby + energie), v <b>{currency}</b>? Pošlete prosté číslo (např. 25000), "
+            "služby + energie), v <b>{currency}</b>? Stačí poslat číslo (jen číslice), "
             "nebo klepněte na Přeskočit.\n\n"
-            "Toto ovlivňuje pouze řazení inzerátů — nic se nebude skrývat."
+            "Nic tím nefiltrujete — inzeráty nad rozpočet se pořád zobrazí, jen jsou "
+            "v žebříčku níž, aby se ty v rozpočtu zobrazily jako první."
         ),
         "ru": (
             "💰 Какой у вас месячный бюджет <b>со всеми расходами</b> (аренда + сервисные "
-            "платежи + коммунальные услуги), в <b>{currency}</b>? Отправьте просто число "
-            "(например, 25000) или нажмите «Пропустить».\n\n"
-            "Это влияет только на ранжирование объявлений — ничего не будет скрыто."
+            "платежи + коммунальные услуги), в <b>{currency}</b>? Просто отправьте число "
+            "(только цифры) или нажмите «Пропустить».\n\n"
+            "Это ничего не скрывает — объявления дороже бюджета всё равно показываются, "
+            "просто ниже в списке, а те, что укладываются в бюджет, поднимаются выше."
         ),
         "uk": (
             "💰 Який ваш місячний бюджет <b>з урахуванням усіх витрат</b> (оренда + "
-            "сервісні платежі + комунальні послуги), у <b>{currency}</b>? Надішліть просто "
-            "число (наприклад, 25000) або натисніть «Пропустити».\n\n"
-            "Це впливає лише на ранжування оголошень — нічого не буде приховано."
+            "сервісні платежі + комунальні послуги), у <b>{currency}</b>? Просто надішліть "
+            "число (лише цифри) або натисніть «Пропустити».\n\n"
+            "Це нічого не приховує — оголошення дорожчі за бюджет усе одно показуються, "
+            "лише нижче у списку, а ті, що вкладаються у бюджет, піднімаються вище."
         ),
     },
     "area_prompt": {
