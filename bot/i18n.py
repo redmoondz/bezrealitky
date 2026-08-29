@@ -146,10 +146,10 @@ _TEXTS: dict[str, dict[str, str]] = {
         "uk": "Це не схоже на звичайне число. Спробуйте ще раз або натисніть «Пропустити».",
     },
     "onboarding_running": {
-        "en": "Saving your search and running the scraper now…",
-        "cs": "Ukládám vaše vyhledávání a spouštím stahování dat…",
-        "ru": "Сохраняю ваш поиск и запускаю сбор данных…",
-        "uk": "Зберігаю ваш пошук і запускаю збір даних…",
+        "en": "🏠 Saving your search and getting everything ready — I'll notify you the moment I find a match.",
+        "cs": "🏠 Ukládám vaše vyhledávání a hledám pro vás ty pravé nabídky — dám vám vědět, jakmile něco najdu.",
+        "ru": "🏠 Сохраняю ваш поиск и уже подбираю варианты для вас — сообщу, как только что-то найдётся.",
+        "uk": "🏠 Зберігаю ваш пошук і вже підбираю варіанти для вас — повідомлю, щойно щось знайдеться.",
     },
     "onboarding_no_results": {
         "en": "Saved! No listings match it yet — I'll keep checking and let you know when something turns up.",

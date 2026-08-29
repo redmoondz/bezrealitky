@@ -96,7 +96,10 @@ export default function Onboarding() {
   if (step === 'running') {
     return <div className="centered-message">
       <h2>Saving your search…</h2>
-      <p>Running the scraper now — this can take a little while the first time.</p>
+      <p>
+        We're finding the best matches for you — this can take a moment the first time, and
+        we'll notify you the instant something new turns up.
+      </p>
     </div>
   }
 
