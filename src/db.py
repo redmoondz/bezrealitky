@@ -706,6 +706,17 @@ def get_or_seed_user_search(conn: psycopg.Connection, telegram_user_id: int, def
     return default_url
 
 
+def list_user_languages(conn: psycopg.Connection) -> list[tuple[int, str]]:
+    """Every known user's Telegram ID and chosen language — used to refresh
+    each user's per-chat Telegram command menu on bot startup, since Telegram
+    caches a per-chat override once set (``set_user_language``'s caller does
+    this too) and won't otherwise surface a command added after that.
+    """
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT telegram_user_id, language_code FROM bot_users")
+        return [(row["telegram_user_id"], row["language_code"]) for row in cursor.fetchall()]
+
+
 def list_registered_users(conn: psycopg.Connection) -> list[int]:
     """Every Telegram user who has an active saved search (i.e. has used /parse
     or /parse_custom at least once) — what the scheduler and notify loop iterate.

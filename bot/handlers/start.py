@@ -50,7 +50,7 @@ class Onboarding(StatesGroup):
 
 _DEFAULT_CURRENCY = "CZK"
 
-def _bot_commands(language: str) -> list[BotCommand]:
+def bot_commands(language: str) -> list[BotCommand]:
     return [
         BotCommand(command=command, description=description)
         for command, description in i18n.bot_command_descriptions(language)
@@ -59,8 +59,10 @@ def _bot_commands(language: str) -> list[BotCommand]:
 
 # Registered with Telegram via bot.set_my_commands() in main.py (English default,
 # shown before a language is chosen), and re-registered per-chat in the user's own
-# language right after they pick one (see _apply_language_choice below).
-BOT_COMMANDS = _bot_commands("en")
+# language right after they pick one (see _apply_language_choice below) — and again
+# for every known user at startup (see main.py), since Telegram caches a per-chat
+# override once set and won't otherwise pick up a newly added command on its own.
+BOT_COMMANDS = bot_commands("en")
 
 
 def _search_currency(search_url: str) -> str:
@@ -315,7 +317,7 @@ async def _apply_language_choice(query: CallbackQuery) -> tuple[str, str] | None
         await query.message.edit_text(i18n.t("language_set_confirm", code, label=label))
     if query.bot:
         await query.bot.set_my_commands(
-            _bot_commands(code), scope=BotCommandScopeChat(chat_id=query.from_user.id)
+            bot_commands(code), scope=BotCommandScopeChat(chat_id=query.from_user.id)
         )
         if config.WEBAPP_URL:
             await query.bot.set_chat_menu_button(
