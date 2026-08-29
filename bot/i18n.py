@@ -187,6 +187,7 @@ _TEXTS: dict[str, dict[str, str]] = {
         "en": (
             "<b>Bezrealitky listings bot</b>\n\n"
             "🌐 /start, /language — choose the bot's language (menus, messages, and listing descriptions)\n"
+            "🔁 /onboarding — redo the setup wizard from scratch (clears your saved search and preferences)\n"
             "📋 /list — browse listings matching your saved search (❤️ Like / 👎 Pass on each)\n"
             "🔎 /view &lt;listing_id&gt; — full details and photos for one listing\n"
             "❤️ /liked — browse the listings you've liked\n"
@@ -205,6 +206,7 @@ _TEXTS: dict[str, dict[str, str]] = {
         "cs": (
             "<b>Bot s inzeráty Bezrealitky</b>\n\n"
             "🌐 /start, /language — vyberte jazyk bota (nabídky, zprávy i popisy inzerátů)\n"
+            "🔁 /onboarding — projít nastavení znovu od začátku (smaže uložené vyhledávání a preference)\n"
             "📋 /list — procházejte inzeráty odpovídající vašemu uloženému vyhledávání "
             "(❤️ Líbí / 👎 Přeskočit u každého)\n"
             "🔎 /view &lt;listing_id&gt; — úplné podrobnosti a fotky jednoho inzerátu\n"
@@ -225,6 +227,7 @@ _TEXTS: dict[str, dict[str, str]] = {
         "ru": (
             "<b>Бот объявлений Bezrealitky</b>\n\n"
             "🌐 /start, /language — выбрать язык бота (меню, сообщения и описания объявлений)\n"
+            "🔁 /onboarding — пройти настройку заново с нуля (очищает сохранённый поиск и предпочтения)\n"
             "📋 /list — просматривать объявления по вашему сохранённому поиску "
             "(❤️ Нравится / 👎 Пропустить для каждого)\n"
             "🔎 /view &lt;listing_id&gt; — полная информация и фото одного объявления\n"
@@ -245,6 +248,7 @@ _TEXTS: dict[str, dict[str, str]] = {
         "uk": (
             "<b>Бот оголошень Bezrealitky</b>\n\n"
             "🌐 /start, /language — обрати мову бота (меню, повідомлення та описи оголошень)\n"
+            "🔁 /onboarding — пройти налаштування знову з нуля (очищує збережений пошук і вподобання)\n"
             "📋 /list — переглядайте оголошення за вашим збереженим пошуком "
             "(❤️ Подобається / 👎 Пропустити для кожного)\n"
             "🔎 /view &lt;listing_id&gt; — повна інформація та фото одного оголошення\n"
