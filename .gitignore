@@ -4,6 +4,7 @@ __pycache__/
 .venv/
 output/
 .env
+.DS_Store
 
 # webapp/frontend (Vite/npm)
 webapp/frontend/node_modules/
