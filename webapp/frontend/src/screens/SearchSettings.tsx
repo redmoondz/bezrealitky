@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import { api } from '../api'
 import { useMainButton } from '../hooks/useMainButton'
-import { hapticNotification } from '../telegram'
+import { confirmAction, hapticNotification } from '../telegram'
 import type { SyncSummary } from '../types'
 
 function SummaryNote({ summary }: { summary: SyncSummary }) {
@@ -18,6 +19,7 @@ function SummaryNote({ summary }: { summary: SyncSummary }) {
 
 export default function SearchSettings() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const search = useQuery({ queryKey: ['search'], queryFn: api.getSearch })
 
   const [urlInput, setUrlInput] = useState('')
@@ -77,6 +79,26 @@ export default function SearchSettings() {
     onClick: () => saveAndRun.mutate(),
     loading: saveAndRun.isPending,
   })
+
+  const resetOnboarding = useMutation({
+    mutationFn: api.resetOnboarding,
+    onSuccess: () => {
+      hapticNotification('success')
+      queryClient.invalidateQueries({ queryKey: ['me'] })
+      navigate('/onboarding')
+    },
+    onError: (err) => {
+      setError(err instanceof Error ? err.message : 'Could not reset onboarding.')
+      hapticNotification('error')
+    },
+  })
+
+  async function onRestartOnboarding() {
+    const confirmed = await confirmAction(
+      'Restart onboarding? This clears your saved search and preferences — you’ll set them up again from scratch.',
+    )
+    if (confirmed) resetOnboarding.mutate()
+  }
 
   return (
     <div className="stack">
@@ -167,6 +189,18 @@ export default function SearchSettings() {
           onClick={() => saveAndRun.mutate()}
         >
           {saveAndRun.isPending ? 'Saving…' : 'Save & run'}
+        </button>
+      </div>
+
+      <div className="card stack">
+        <p className="listing-card__meta">Redo the setup wizard from scratch, same as the bot's /onboarding command</p>
+        <button
+          type="button"
+          className="btn btn--ghost btn--block"
+          disabled={resetOnboarding.isPending}
+          onClick={onRestartOnboarding}
+        >
+          {resetOnboarding.isPending ? 'Resetting…' : 'Restart onboarding'}
         </button>
       </div>
     </div>

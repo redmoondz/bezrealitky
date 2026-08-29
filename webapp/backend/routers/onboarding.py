@@ -52,6 +52,16 @@ async def set_preferences(
     return {"ok": True}
 
 
+@router.post("/reset")
+async def reset(user: TelegramUser = Depends(get_current_telegram_user)) -> dict:
+    """Clear the saved search and preferences so the wizard (``Onboarding.tsx``)
+    can be run again from scratch — the Mini App's counterpart to the bot's
+    ``/onboarding`` command.
+    """
+    await run_db(db.reset_user_onboarding, user.id)
+    return {"ok": True}
+
+
 @router.post("/finish", response_model=SyncSummary)
 async def finish(user: TelegramUser = Depends(get_current_telegram_user)) -> SyncSummary:
     base_config = await asyncio.to_thread(load_config)

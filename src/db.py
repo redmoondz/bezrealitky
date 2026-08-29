@@ -674,6 +674,28 @@ def set_user_search(conn: psycopg.Connection, telegram_user_id: int, search_url:
             )
 
 
+def reset_user_onboarding(conn: psycopg.Connection, telegram_user_id: int) -> None:
+    """Clear a user's saved search and preferences so the onboarding wizard
+    (bot ``/onboarding``, Mini App "Restart onboarding") treats them as
+    unonboarded again. Nulls ``search_url`` in place rather than deleting the
+    ``bot_users`` row, so listing/relevance history (``ON DELETE CASCADE``
+    from that row) survives, same as any other saved-search change.
+    """
+    ensure_bot_user(conn, telegram_user_id)
+    with conn.transaction():
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "UPDATE bot_users SET search_url = NULL, updated_at = now() "
+                "WHERE telegram_user_id = %s",
+                (telegram_user_id,),
+            )
+            cursor.execute(
+                "UPDATE user_preferences SET wants_pets = NULL, budget_total_price = NULL, "
+                "min_area_m2 = NULL, updated_at = now() WHERE telegram_user_id = %s",
+                (telegram_user_id,),
+            )
+
+
 def get_or_seed_user_search(conn: psycopg.Connection, telegram_user_id: int, default_url: str) -> str:
     """Return the user's saved search, creating one from ``default_url`` on first use."""
     ensure_bot_user(conn, telegram_user_id)

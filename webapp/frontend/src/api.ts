@@ -66,6 +66,7 @@ export const api = {
   setOnboardingPreferences: (payload: PreferencesPayload) =>
     post<{ ok: boolean }>('/onboarding/preferences', payload),
   finishOnboarding: () => post<SyncSummary>('/onboarding/finish'),
+  resetOnboarding: () => post<{ ok: boolean }>('/onboarding/reset'),
 
   queue: (offset: number) => get<ListingQueuePage>(`/listings/queue?offset=${offset}`),
   liked: (offset: number) => get<ListingQueuePage>(`/liked?offset=${offset}`),

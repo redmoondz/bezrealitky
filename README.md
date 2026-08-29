@@ -166,6 +166,7 @@ Leave it unset (or anything other than `true`) and access stays closed to
 |---|---|
 | `/start`, `/language` | Pick the bot's language — menus, messages, and listing descriptions |
 | `/help` | Show all available commands |
+| `/onboarding` | Redo the onboarding wizard from scratch (clears your saved search and preferences) |
 | `/list` | Paginate your saved search's matching listings (photo, price, area, floor, pets, link) |
 | `/view <listing_id>` | Full detail + all photos for one listing |
 | `/liked` | Browse the listings you've liked |

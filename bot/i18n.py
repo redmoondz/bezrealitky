@@ -49,6 +49,12 @@ _TEXTS: dict[str, dict[str, str]] = {
         "ru": "Неизвестный язык.",
         "uk": "Невідома мова.",
     },
+    "onboarding_reset_confirm": {
+        "en": "🔄 Onboarding reset — let's start again.",
+        "cs": "🔄 Onboarding byl resetován — pojďme na to znovu.",
+        "ru": "🔄 Онбординг сброшен — начнём заново.",
+        "uk": "🔄 Онбординг скинуто — почнімо знову.",
+    },
     "onboarding_prompt": {
         "en": (
             "🔗 <b>One more thing — let's personalize your search.</b>\n\n"
@@ -641,6 +647,7 @@ _BOT_COMMAND_ORDER = [
     "start",
     "help",
     "language",
+    "onboarding",
     "list",
     "view",
     "liked",
@@ -669,6 +676,12 @@ _BOT_COMMAND_DESCRIPTIONS: dict[str, dict[str, str]] = {
         "cs": "Vybrat jazyk překladu",
         "ru": "Выбрать язык перевода",
         "uk": "Вибрати мову перекладу",
+    },
+    "onboarding": {
+        "en": "Redo the onboarding wizard from scratch",
+        "cs": "Projít onboarding znovu od začátku",
+        "ru": "Пройти онбординг заново",
+        "uk": "Пройти онбординг знову",
     },
     "list": {
         "en": "Browse listings matching your saved search",

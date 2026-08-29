@@ -90,6 +90,12 @@ def _has_saved_search(telegram_user_id: int) -> bool:
         return db.get_user_search(conn, telegram_user_id) is not None
 
 
+def _reset_onboarding(telegram_user_id: int) -> None:
+    with db.connect() as conn:
+        db.ensure_schema(conn)
+        db.reset_user_onboarding(conn, telegram_user_id)
+
+
 def _default_search_url() -> str:
     return load_config()["search"]["url"]
 
@@ -173,6 +179,25 @@ async def _finish_onboarding(message: Message, telegram_user_id: int, search_url
 async def start(message: Message, state: FSMContext) -> None:
     await state.set_state(Onboarding.waiting_for_language)
     await message.answer(i18n.LANGUAGE_PROMPT_INITIAL, reply_markup=language_keyboard())
+
+
+@router.message(Command("onboarding"), IsAllowed())
+async def onboarding_restart(message: Message, state: FSMContext) -> None:
+    """Redo the onboarding wizard from scratch — clears the saved search and
+    preferences first so the post-language-choice handler (which otherwise
+    treats a user with a saved search as already onboarded) continues into
+    the full wizard again instead of stopping short.
+    """
+    language = await asyncio.to_thread(_user_language, message.from_user.id)
+    await asyncio.to_thread(_reset_onboarding, message.from_user.id)
+    await message.answer(i18n.t("onboarding_reset_confirm", language))
+    await state.set_state(Onboarding.waiting_for_language)
+    await message.answer(i18n.LANGUAGE_PROMPT_INITIAL, reply_markup=language_keyboard())
+
+
+@router.message(Command("onboarding"))
+async def onboarding_restart_denied(message: Message) -> None:
+    await message.answer(await denial_text_for(message.from_user.id))
 
 
 @router.message(Command("help"))
