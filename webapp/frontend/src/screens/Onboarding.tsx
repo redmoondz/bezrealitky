@@ -104,12 +104,17 @@ export default function Onboarding() {
   }
 
   if (step === 'done' && summary) {
+    const matchNote = summary.new_count
+      ? `, ${summary.new_count} new for you`
+      : summary.queue_total
+        ? `. ${summary.queue_total} listing(s) are waiting for your reaction`
+        : ''
     return (
       <div className="centered-message">
         <h2>You’re all set</h2>
         <p>
           Synced {summary.synced} listing(s)
-          {summary.new_count ? `, ${summary.new_count} new for you` : ''}.
+          {matchNote}.
           {summary.failures ? ` ${summary.failures} publication(s) failed to parse.` : ''}
         </p>
         <button className="btn btn--primary" onClick={() => navigate('/browse')}>

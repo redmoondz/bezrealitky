@@ -16,6 +16,7 @@ export interface SyncSummary {
   synced: number
   failures: number
   new_count: number
+  queue_total: number
 }
 
 export interface SearchUpdateResponse extends SyncSummary {

@@ -73,4 +73,7 @@ async def finish(user: TelegramUser = Depends(get_current_telegram_user)) -> Syn
     except (ConfigurationError, OSError) as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     new_count = await run_db(db.count_unnotified_relevant_listings, user.id)
-    return SyncSummary(synced=len(listings), failures=len(failures), new_count=new_count)
+    queue_total = await run_db(db.count_relevant_listings, user.id)
+    return SyncSummary(
+        synced=len(listings), failures=len(failures), new_count=new_count, queue_total=queue_total
+    )

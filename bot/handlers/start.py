@@ -98,6 +98,12 @@ def _reset_onboarding(telegram_user_id: int) -> None:
         db.reset_user_onboarding(conn, telegram_user_id)
 
 
+def _queue_count(telegram_user_id: int) -> int:
+    with db.connect() as conn:
+        db.ensure_schema(conn)
+        return db.count_relevant_listings(conn, telegram_user_id)
+
+
 def _default_search_url() -> str:
     return load_config()["search"]["url"]
 
@@ -171,10 +177,19 @@ async def _finish_onboarding(message: Message, telegram_user_id: int, search_url
     if failures:
         await message.answer(i18n.t("onboarding_failures_note", language, count=len(failures)))
     rows, notify_language = await asyncio.to_thread(notify_loop.load_unnotified, telegram_user_id)
-    if not rows:
-        await message.answer(i18n.t("onboarding_no_results", language))
+    if rows:
+        await notify_loop.notify_matches(message.bot, telegram_user_id, rows, notify_language)
         return
-    await notify_loop.notify_matches(message.bot, telegram_user_id, rows, notify_language)
+    # No *new* matches to push — but "new since the last notification" isn't
+    # the same as "nothing found": re-running onboarding with an overlapping
+    # search commonly turns up listings that were already notified about in a
+    # previous run and are simply still sitting unreacted-to in the queue.
+    # Telling the user "no results" there would be flatly wrong.
+    queue_count = await asyncio.to_thread(_queue_count, telegram_user_id)
+    if queue_count:
+        await message.answer(i18n.t("onboarding_queue_waiting", language, count=queue_count))
+    else:
+        await message.answer(i18n.t("onboarding_no_results", language))
 
 
 @router.message(Command("start"))

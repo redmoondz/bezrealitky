@@ -52,6 +52,7 @@ class SyncSummary(BaseModel):
     synced: int
     failures: int
     new_count: int
+    queue_total: int
 
 
 class SearchUpdateRequest(BaseModel):

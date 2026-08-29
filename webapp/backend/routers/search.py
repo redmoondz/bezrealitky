@@ -33,6 +33,10 @@ async def _new_match_count(telegram_user_id: int) -> int:
     return await run_db(db.count_unnotified_relevant_listings, telegram_user_id)
 
 
+async def _queue_total(telegram_user_id: int) -> int:
+    return await run_db(db.count_relevant_listings, telegram_user_id)
+
+
 @router.get("", response_model=SearchResponse)
 async def get_search(user: TelegramUser = Depends(get_current_telegram_user)) -> SearchResponse:
     base_config = await asyncio.to_thread(load_config)
@@ -51,7 +55,10 @@ async def run_search(user: TelegramUser = Depends(get_current_telegram_user)) ->
     except (ConfigurationError, OSError) as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     new_count = await _new_match_count(user.id)
-    return SyncSummary(synced=len(listings), failures=len(failures), new_count=new_count)
+    queue_total = await _queue_total(user.id)
+    return SyncSummary(
+        synced=len(listings), failures=len(failures), new_count=new_count, queue_total=queue_total
+    )
 
 
 @router.post("", response_model=SearchUpdateResponse)
@@ -79,6 +86,11 @@ async def update_search(
     except (ConfigurationError, OSError) as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     new_count = await _new_match_count(user.id)
+    queue_total = await _queue_total(user.id)
     return SearchUpdateResponse(
-        new_url=new_url, synced=len(listings), failures=len(failures), new_count=new_count
+        new_url=new_url,
+        synced=len(listings),
+        failures=len(failures),
+        new_count=new_count,
+        queue_total=queue_total,
     )
