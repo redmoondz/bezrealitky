@@ -185,7 +185,8 @@ export default function Onboarding() {
         <div className="stack">
           <h1 className="screen-title">💰 Budget</h1>
           <p className="listing-card__meta">
-            Monthly budget, all costs included (rent + service + utilities). This only affects ranking.
+            Monthly budget, all costs included (rent + service + utilities). This doesn't filter
+            anything out — listings above budget still show up, just ranked lower.
           </p>
           <div className="field">
             <label htmlFor="budget">Budget</label>
@@ -194,7 +195,7 @@ export default function Onboarding() {
               inputMode="numeric"
               value={budgetInput}
               onChange={(event) => setBudgetInput(event.target.value)}
-              placeholder="25000"
+              placeholder="Amount"
             />
           </div>
           <button className="btn btn--primary btn--block" onClick={() => submitBudget(false)}>
