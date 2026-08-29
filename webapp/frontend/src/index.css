@@ -74,6 +74,7 @@ button {
 .app-content {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: calc(var(--safe-top) + 16px) calc(var(--safe-left) + 16px) 16px
     calc(var(--safe-right) + 16px);
 }
@@ -355,6 +356,93 @@ button {
 
 .progress-dots__dot--active {
   background: var(--color-accent);
+}
+
+/* Swipe deck (Tinder-style card stack, Browse) */
+
+.swipe-deck {
+  display: grid;
+}
+
+.swipe-deck > .swipe-card {
+  grid-area: 1 / 1;
+  width: 100%;
+}
+
+.swipe-card {
+  will-change: transform;
+  user-select: none;
+}
+
+.swipe-card--live {
+  cursor: grab;
+  touch-action: pan-y;
+}
+
+.swipe-card--live:active {
+  cursor: grabbing;
+}
+
+.swipe-card--stacked,
+.swipe-card--overlay {
+  pointer-events: none;
+}
+
+.swipe-card--stacked {
+  z-index: 1;
+}
+
+.swipe-card--live {
+  z-index: 2;
+}
+
+.swipe-card--overlay {
+  z-index: 3;
+}
+
+.swipe-card__surface {
+  position: relative;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  padding: 12px;
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.14),
+    0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  .swipe-card__surface {
+    box-shadow:
+      0 12px 32px rgba(0, 0, 0, 0.45),
+      0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+}
+
+.swipe-card__stamp {
+  position: absolute;
+  top: 24px;
+  padding: 6px 14px;
+  border: 3px solid;
+  border-radius: 10px;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.swipe-card__stamp--like {
+  left: 24px;
+  color: var(--color-success);
+  border-color: var(--color-success);
+  transform: rotate(-18deg);
+}
+
+.swipe-card__stamp--nope {
+  right: 24px;
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+  transform: rotate(18deg);
 }
 
 /* Listing card (Browse / Liked) */
