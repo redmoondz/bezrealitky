@@ -1,22 +1,33 @@
 import { useQuery } from '@tanstack/react-query'
 import 'leaflet/dist/leaflet.css'
-import { useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { MapContainer, Marker, TileLayer } from 'react-leaflet'
-import { useParams } from 'react-router-dom'
+import { useLocation, useParams } from 'react-router-dom'
 
 import { api } from '../api'
+import type { RectLike } from '../components/SwipeCard'
 import { useBackButton } from '../hooks/useBackButton'
+import type { ListingCard, ListingDetail as ListingDetailData } from '../types'
 import { formatFloor, formatPrice, petsLabel } from '../utils/listingFormat'
 
 const TOP_MATCH_THRESHOLD = 25
 // Above this many photos, dots would overcrowd the strip — the counter alone stays legible.
 const MAX_DOTS = 10
+const EXPAND_DURATION_MS = 420
+
+interface DetailTransitionState {
+  originRect?: RectLike
+  card?: ListingCard
+}
 
 export default function ListingDetail() {
   const { listingId } = useParams<{ listingId: string }>()
+  const location = useLocation()
+  const transition = (location.state as DetailTransitionState | null) ?? null
   useBackButton()
   const [activeIndex, setActiveIndex] = useState(0)
   const carouselRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   const detail = useQuery({
     queryKey: ['listing', listingId],
@@ -24,10 +35,55 @@ export default function ListingDetail() {
     enabled: Boolean(listingId),
   })
 
-  if (detail.isLoading) return <p>Loading…</p>
-  if (detail.isError || !detail.data) return <p>Listing not found.</p>
+  // The "unfold" transition: Browse hands us the tapped card's on-screen rect
+  // (captured the instant it was tapped) via router state. We clip this
+  // page's own layout down to a window matching that rect, then widen the
+  // window to the full page on the next frame — the page visibly grows out
+  // of the card instead of just appearing. Deliberately clip-path (a window
+  // that widens) rather than a scale transform: the card is short and this
+  // page can be much taller (description, map), so scaling would visibly
+  // squash all the text and photos for the duration of the animation. Runs
+  // once against the rect captured at tap time, not on every render (hence
+  // the empty deps array below).
+  useLayoutEffect(() => {
+    const origin = transition?.originRect
+    const el = containerRef.current
+    if (!origin || !el) return
+    const final = el.getBoundingClientRect()
+    if (final.width === 0 || final.height === 0) return
 
-  const row = detail.data
+    const top = Math.max(0, origin.top - final.top)
+    const left = Math.max(0, origin.left - final.left)
+    const right = Math.max(0, final.width - left - origin.width)
+    const bottom = Math.max(0, final.height - top - origin.height)
+
+    el.style.willChange = 'clip-path, opacity'
+    el.style.transition = 'none'
+    el.style.clipPath = `inset(${top}px ${right}px ${bottom}px ${left}px round 18px)`
+    el.style.opacity = '0.85'
+
+    let raf2 = 0
+    let cleanupTimer = 0
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        el.style.transition = `clip-path ${EXPAND_DURATION_MS}ms cubic-bezier(0.16, 1, 0.3, 1), opacity ${Math.round(EXPAND_DURATION_MS * 0.6)}ms ease-out`
+        el.style.clipPath = 'inset(0px 0px 0px 0px round 0px)'
+        el.style.opacity = '1'
+        cleanupTimer = window.setTimeout(() => {
+          el.style.transition = ''
+          el.style.clipPath = ''
+          el.style.opacity = ''
+          el.style.willChange = ''
+        }, EXPAND_DURATION_MS + 50)
+      })
+    })
+    return () => {
+      cancelAnimationFrame(raf1)
+      cancelAnimationFrame(raf2)
+      clearTimeout(cleanupTimer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function scrollToIndex(index: number) {
     const el = carouselRef.current
@@ -41,8 +97,20 @@ export default function ListingDetail() {
     setActiveIndex(Math.round(el.scrollLeft / el.clientWidth))
   }
 
+  // `full` only arrives once /listings/:id resolves (description, translation
+  // status, coordinates). Everything else (photos, name, price, meta, tags)
+  // is already on the summary card Browse handed us, so the expand
+  // animation has real content to grow into instead of a bare spinner.
+  const full = detail.data
+  const row: ListingCard | ListingDetailData | undefined = full ?? transition?.card ?? undefined
+
+  if (!row) {
+    if (detail.isLoading) return <p>Loading…</p>
+    return <p>Listing not found.</p>
+  }
+
   return (
-    <div className="stack">
+    <div className="stack" ref={containerRef}>
       {row.images.length > 0 ? (
         <div className="detail-photo-frame">
           <div className="detail-photo-carousel" ref={carouselRef} onScroll={onCarouselScroll}>
@@ -112,23 +180,26 @@ export default function ListingDetail() {
             ))}
           </div>
         )}
+        {detail.isError && !full && (
+          <p className="listing-card__meta">⚠️ Couldn't load the full listing — showing what we had.</p>
+        )}
       </div>
 
-      {row.description && (
+      {full?.description && (
         <div className="card">
-          {!row.translation_ok && (
+          {!full.translation_ok && (
             <p className="listing-card__meta">
               ⚠️ Translation temporarily unavailable — showing the original text.
             </p>
           )}
-          <p className="detail-description">{row.description}</p>
+          <p className="detail-description">{full.description}</p>
         </div>
       )}
 
-      {row.latitude != null && row.longitude != null && (
+      {full?.latitude != null && full?.longitude != null && (
         <div className="map-frame">
           <MapContainer
-            center={[row.latitude, row.longitude]}
+            center={[full.latitude, full.longitude]}
             zoom={15}
             style={{ height: '100%', width: '100%' }}
             scrollWheelZoom={false}
@@ -137,7 +208,7 @@ export default function ListingDetail() {
               attribution="&copy; OpenStreetMap contributors"
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
-            <Marker position={[row.latitude, row.longitude]} />
+            <Marker position={[full.latitude, full.longitude]} />
           </MapContainer>
         </div>
       )}

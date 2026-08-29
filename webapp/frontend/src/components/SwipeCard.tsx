@@ -11,6 +11,15 @@ export interface SwipeTransform {
 
 export type SwipeDirection = 'left' | 'right'
 
+// A plain, structured-clone-friendly stand-in for DOMRect — react-router's
+// browser history state must survive history.pushState's serialization.
+export interface RectLike {
+  top: number
+  left: number
+  width: number
+  height: number
+}
+
 // Tinder's own swipe mechanic: rotation is simply proportional to how far the
 // card has been dragged horizontally, capped at MAX_ROTATION_DEG — the same
 // model Marc Kremers described in "Prototyping a Tinder-like swiping
@@ -40,7 +49,7 @@ interface DragState {
 interface Props {
   card: ListingCard
   variant: 'live' | 'stacked' | 'overlay'
-  onOpenDetail?: () => void
+  onOpenDetail?: (originRect: RectLike) => void
   onSwipeConfirmed?: (direction: SwipeDirection, transform: SwipeTransform) => void
   disabled?: boolean
   initialTransform?: SwipeTransform
@@ -62,7 +71,7 @@ export default function SwipeCard({
 }: Props) {
   const cardRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<DragState | null>(null)
-  const lastDragMovedRef = useRef(false)
+  const suppressNextClickRef = useRef(false)
 
   const [transform, setTransform] = useState<SwipeTransform>(initialTransform ?? REST)
   const [transitionMs, setTransitionMs] = useState(0)
@@ -125,11 +134,23 @@ export default function SwipeCard({
     setTransform({ x: dx, y: dy * 0.4, rotate })
   }
 
+  // The single entry point for "open the detail view" — called either
+  // programmatically (a tap detected via pointer events, see endDrag below)
+  // or natively (a button click from keyboard/screen-reader activation,
+  // which never goes through a pointerdown and so isn't suppressed there).
+  function handlePhotoClick() {
+    if (variant !== 'live' || !cardRef.current) return
+    const { top, left, width, height } = cardRef.current.getBoundingClientRect()
+    onOpenDetail?.({ top, left, width, height })
+  }
+
   function endDrag(event: React.PointerEvent) {
     const drag = dragRef.current
     if (!drag || drag.pointerId !== event.pointerId) return
     dragRef.current = null
-    lastDragMovedRef.current = drag.moved
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
 
     const width = cardRef.current?.offsetWidth || 300
     const distanceRatio = Math.abs(transform.x) / width
@@ -144,6 +165,21 @@ export default function SwipeCard({
 
     setTransitionMs(RETURN_DURATION_MS)
     setTransform(REST)
+
+    // A tap (pointer never crossed the move tolerance) opens the detail view
+    // right here rather than waiting for the native click that follows —
+    // setPointerCapture on this element can retarget that click away from
+    // the nested photo button, so it may never actually reach it. Either way
+    // (handled here, or an aborted drag that shouldn't open anything), mark
+    // the upcoming click as spent so it can't double-fire; self-clears
+    // shortly after in case no click actually follows.
+    suppressNextClickRef.current = true
+    setTimeout(() => {
+      suppressNextClickRef.current = false
+    }, 400)
+    if (event.type === 'pointerup' && !drag.moved) {
+      handlePhotoClick()
+    }
   }
 
   function onTransitionEnd(event: React.TransitionEvent) {
@@ -152,7 +188,13 @@ export default function SwipeCard({
   }
 
   function guardClick(event: React.MouseEvent) {
-    if (variant !== 'live' || lastDragMovedRef.current) {
+    if (suppressNextClickRef.current) {
+      suppressNextClickRef.current = false
+      event.preventDefault()
+      event.stopPropagation()
+      return
+    }
+    if (variant !== 'live') {
       event.preventDefault()
       event.stopPropagation()
     }
@@ -184,7 +226,7 @@ export default function SwipeCard({
       onTransitionEnd={variant === 'overlay' ? onTransitionEnd : undefined}
     >
       <div className="swipe-card__surface">
-        <ListingCardView card={card} onOpenDetail={onOpenDetail ?? (() => {})} />
+        <ListingCardView card={card} onOpenDetail={handlePhotoClick} />
         {variant !== 'stacked' && (
           <>
             <span className="swipe-card__stamp swipe-card__stamp--like" style={{ opacity: likeOpacity }}>

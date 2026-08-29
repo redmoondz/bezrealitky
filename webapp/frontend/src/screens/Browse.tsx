@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 
 import { api } from '../api'
 import SwipeCard from '../components/SwipeCard'
-import type { SwipeDirection, SwipeTransform } from '../components/SwipeCard'
+import type { RectLike, SwipeDirection, SwipeTransform } from '../components/SwipeCard'
 import { hapticImpact } from '../telegram'
 import type { ListingCard, Reaction } from '../types'
 
@@ -69,6 +69,14 @@ export default function Browse() {
     confirmSwipe(reaction === 'like' ? 'right' : 'left', { x: 0, y: 0, rotate: 0 })
   }
 
+  function openDetail(item: ListingCard, originRect: RectLike) {
+    // Kicked off alongside the expand animation so the full detail (which
+    // adds description/map on top of what `card` already carries) is likely
+    // ready by the time the card finishes unfolding.
+    queryClient.prefetchQuery({ queryKey: ['listing', item.listing_id], queryFn: () => api.listing(item.listing_id) })
+    navigate(`/listing/${item.listing_id}`, { state: { originRect, card: item } })
+  }
+
   if (!liveItem && !exiting) {
     const emptyQueue = total === 0
     return (
@@ -99,7 +107,7 @@ export default function Browse() {
             card={liveItem}
             variant="live"
             disabled={react.isPending}
-            onOpenDetail={() => navigate(`/listing/${liveItem.listing_id}`)}
+            onOpenDetail={(rect) => openDetail(liveItem, rect)}
             onSwipeConfirmed={confirmSwipe}
           />
         )}
