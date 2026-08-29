@@ -157,6 +157,24 @@ _TEXTS: dict[str, dict[str, str]] = {
         "ru": "Сохранено! Пока нет подходящих объявлений — я продолжу проверять и сообщу, как только что-то появится.",
         "uk": "Збережено! Поки що немає відповідних оголошень — я продовжу перевіряти й повідомлю, щойно щось з'явиться.",
     },
+    "onboarding_queue_waiting": {
+        "en": (
+            "👀 Saved! Nothing brand-new since last time, but {count} listing(s) are still "
+            "waiting for your reaction — check them out with /list or in the Mini App."
+        ),
+        "cs": (
+            "👀 Uloženo! Od minula nic úplně nového, ale na vaši reakci stále čeká: "
+            "{count} inzerátů — podívejte se přes /list nebo v Mini Aplikaci."
+        ),
+        "ru": (
+            "👀 Сохранено! Совсем новых с прошлого раза нет, но всё ещё ждут вашей реакции: "
+            "{count} объявлений — посмотрите их через /list или в Mini App."
+        ),
+        "uk": (
+            "👀 Збережено! Зовсім нових з минулого разу немає, але досі чекають на вашу "
+            "реакцію: {count} оголошень — перегляньте їх через /list або в Mini App."
+        ),
+    },
     "onboarding_invalid_url": {
         "en": (
             "That doesn't look like a valid bezrealitky.com search link: {error}\n\n"

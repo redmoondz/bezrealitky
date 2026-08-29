@@ -8,7 +8,11 @@ import { confirmAction, hapticNotification } from '../telegram'
 import type { SyncSummary } from '../types'
 
 function SummaryNote({ summary }: { summary: SyncSummary }) {
-  const newNote = summary.new_count ? `${summary.new_count} new` : 'no new matches'
+  const newNote = summary.new_count
+    ? `${summary.new_count} new`
+    : summary.queue_total
+      ? `no new matches, but ${summary.queue_total} still waiting for your reaction`
+      : 'no new matches'
   return (
     <p className="listing-card__meta">
       Synced {summary.synced} listing(s) ({newNote}).
