@@ -139,6 +139,36 @@ _TEXTS: dict[str, dict[str, str]] = {
         "ru": "📐 Нужна минимальная площадь в м²? Отправьте просто число (например, 40) или нажмите «Пропустить».",
         "uk": "📐 Потрібна мінімальна площа у м²? Надішліть просто число (наприклад, 40) або натисніть «Пропустити».",
     },
+    "floor_number_prompt": {
+        "en": (
+            "🪜 Any minimum floor for the apartment itself? (e.g. 1 to skip the ground "
+            "floor) Send a plain number, or tap Skip."
+        ),
+        "cs": (
+            "🪜 Potřebujete minimální podlaží bytu? (např. 1, pokud nechcete přízemí) "
+            "Pošlete prosté číslo, nebo klepněte na Přeskočit."
+        ),
+        "ru": (
+            "🪜 Нужен минимальный этаж квартиры? (например, 1, если не хотите первый этаж) "
+            "Отправьте просто число или нажмите «Пропустить»."
+        ),
+        "uk": (
+            "🪜 Потрібен мінімальний поверх квартири? (наприклад, 1, якщо не хочете "
+            "перший поверх) Надішліть просто число або натисніть «Пропустити»."
+        ),
+    },
+    "floor_total_prompt": {
+        "en": "🏢 Any minimum number of floors in the building? Send a plain number, or tap Skip.",
+        "cs": "🏢 Potřebujete minimální počet podlaží v domě? Pošlete prosté číslo, nebo klepněte na Přeskočit.",
+        "ru": "🏢 Нужно минимальное количество этажей в доме? Отправьте просто число или нажмите «Пропустить».",
+        "uk": "🏢 Потрібна мінімальна кількість поверхів у будинку? Надішліть просто число або натисніть «Пропустити».",
+    },
+    "furniture_prompt": {
+        "en": "🛋 Do you want a place that's already furnished?",
+        "cs": "🛋 Chcete bydlení, které je již vybavené nábytkem?",
+        "ru": "🛋 Хотите жильё с меблировкой?",
+        "uk": "🛋 Хочете житло з меблями?",
+    },
     "number_retry": {
         "en": "That doesn't look like a plain number. Please try again, or tap Skip.",
         "cs": "To nevypadá jako prosté číslo. Zkuste to prosím znovu, nebo klepněte na Přeskočit.",
@@ -472,6 +502,18 @@ _TEXTS: dict[str, dict[str, str]] = {
         "uk": "🐾 Так",
     },
     "pets_no_button": {
+        "en": "🚫 No",
+        "cs": "🚫 Ne",
+        "ru": "🚫 Нет",
+        "uk": "🚫 Ні",
+    },
+    "furniture_yes_button": {
+        "en": "🛋 Yes",
+        "cs": "🛋 Ano",
+        "ru": "🛋 Да",
+        "uk": "🛋 Так",
+    },
+    "furniture_no_button": {
         "en": "🚫 No",
         "cs": "🚫 Ne",
         "ru": "🚫 Нет",

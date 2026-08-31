@@ -21,10 +21,12 @@ from urllib3.util.retry import Retry
 try:
     from .amenities import classify_amenities
     from .floor import parse_floor
+    from .furnished import parse_furnished
     from .pets import classify_pets_friendly
 except ImportError:  # Support: python3 src/scraper.py
     from amenities import classify_amenities  # type: ignore[no-redef]
     from floor import parse_floor  # type: ignore[no-redef]
+    from furnished import parse_furnished  # type: ignore[no-redef]
     from pets import classify_pets_friendly  # type: ignore[no-redef]
 
 LOGGER = logging.getLogger(__name__)
@@ -59,6 +61,7 @@ class Listing:
     floor_number: str = ""
     floor_total: str = ""
     fully_furnished: str = ""
+    furnished: str = ""
     construction: str = ""
     condition: str = ""
     surroundings: str = ""
@@ -388,6 +391,7 @@ def parse_listing(content: str, listing_url: str) -> Listing:
     price_per_unit_raw = table.get("price per unit", "")
     floor_raw = table.get("floor", "")
     floor_number, floor_total = parse_floor(floor_raw)
+    fully_furnished_raw = table.get("fully furnished", "")
     description = extract_description(soup)
     amenities = classify_amenities(description)
     return Listing(
@@ -413,7 +417,8 @@ def parse_listing(content: str, listing_url: str) -> Listing:
         floor=floor_raw,
         floor_number=floor_number,
         floor_total=floor_total,
-        fully_furnished=table.get("fully furnished", ""),
+        fully_furnished=fully_furnished_raw,
+        furnished=parse_furnished(fully_furnished_raw),
         construction=table.get("building construction", ""),
         condition=table.get("condition", ""),
         surroundings=table.get("location", ""),

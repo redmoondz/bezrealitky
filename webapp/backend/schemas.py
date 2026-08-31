@@ -46,6 +46,9 @@ class PreferencesRequest(BaseModel):
     wants_pets: bool | None = None
     budget_total_price: float | None = None
     min_area_m2: float | None = None
+    min_floor_number: float | None = None
+    min_floor_total: float | None = None
+    wants_furnished: bool | None = None
 
 
 class SyncSummary(BaseModel):
@@ -81,6 +84,7 @@ class ListingCard(BaseModel):
     area: float | None = None
     format: str = ""
     fully_furnished: str = ""
+    furnished: bool | None = None
     floor_number: int | None = None
     floor_total: int | None = None
     floor: str = ""

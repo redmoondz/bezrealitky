@@ -26,6 +26,15 @@ _BUDGET_OVER_CEILING_PENALTY = -1000
 _AREA_MATCH_BONUS = 10
 _AREA_MISMATCH_PENALTY = -10
 
+# Same magnitude as area — a "nice to have" threshold preference, not a hard
+# filter. Apartment floor and building height score independently, so a
+# listing satisfying both a min floor and a min building height earns both.
+_FLOOR_MATCH_BONUS = 10
+_FLOOR_MISMATCH_PENALTY = -10
+
+_FURNITURE_MATCH_BONUS = 15
+_FURNITURE_MISMATCH_PENALTY = -20
+
 # A listing at or above this total score gets the "Top match" badge in Telegram.
 TOP_MATCH_THRESHOLD = 25
 
@@ -63,6 +72,30 @@ def _area_score(listing: dict, preferences: dict) -> int:
     return _AREA_MATCH_BONUS if area >= min_area else _AREA_MISMATCH_PENALTY
 
 
+def _floor_score(listing: dict, preferences: dict) -> int:
+    score = 0
+    min_floor_number = preferences.get("min_floor_number")
+    floor_number = listing.get("floor_number")
+    if min_floor_number is not None and floor_number is not None:
+        score += _FLOOR_MATCH_BONUS if floor_number >= min_floor_number else _FLOOR_MISMATCH_PENALTY
+    min_floor_total = preferences.get("min_floor_total")
+    floor_total = listing.get("floor_total")
+    if min_floor_total is not None and floor_total is not None:
+        score += _FLOOR_MATCH_BONUS if floor_total >= min_floor_total else _FLOOR_MISMATCH_PENALTY
+    return score
+
+
+def _furniture_score(listing: dict, preferences: dict) -> int:
+    if preferences.get("wants_furnished") is not True:
+        return 0
+    furnished = listing.get("furnished")
+    if furnished is True:
+        return _FURNITURE_MATCH_BONUS
+    if furnished is False:
+        return _FURNITURE_MISMATCH_PENALTY
+    return 0
+
+
 def compute_score(listing: dict, preferences: dict) -> int:
     """Sum of every rule's contribution — see module docstring for the rules.
 
@@ -75,4 +108,6 @@ def compute_score(listing: dict, preferences: dict) -> int:
         _pets_score(listing, preferences)
         + _budget_score(listing, preferences)
         + _area_score(listing, preferences)
+        + _floor_score(listing, preferences)
+        + _furniture_score(listing, preferences)
     )

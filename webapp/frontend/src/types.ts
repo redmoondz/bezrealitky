@@ -36,6 +36,7 @@ export interface ListingCard {
   area: number | null
   format: string
   fully_furnished: string
+  furnished: boolean | null
   floor_number: number | null
   floor_total: number | null
   floor: string
@@ -103,6 +104,9 @@ export interface PreferencesPayload {
   wants_pets?: boolean
   budget_total_price?: number
   min_area_m2?: number
+  min_floor_number?: number
+  min_floor_total?: number
+  wants_furnished?: boolean
 }
 
 export interface AdminStats {

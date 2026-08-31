@@ -1,9 +1,9 @@
 """Onboarding endpoints — mirrors ``bot/handlers/start.py``'s ``Onboarding``
 FSM (language is handled by ``routers/meta.py``; this covers the saved-search
-URL-or-default step and the pets/budget/area preference steps). Each step is
-independently skippable, same as the bot: the frontend wizard calls each
-endpoint once per step and simply omits a field to mean "skip", rather than
-the bot's server-side FSM state.
+URL-or-default step and the pets/budget/area/floor/furniture preference
+steps). Each step is independently skippable, same as the bot: the frontend
+wizard calls each endpoint once per step and simply omits a field to mean
+"skip", rather than the bot's server-side FSM state.
 """
 
 from __future__ import annotations
@@ -22,7 +22,14 @@ from ..telegram_auth import get_current_telegram_user
 
 router = APIRouter(prefix="/onboarding", tags=["onboarding"])
 
-_PREFERENCE_FIELDS = ("wants_pets", "budget_total_price", "min_area_m2")
+_PREFERENCE_FIELDS = (
+    "wants_pets",
+    "budget_total_price",
+    "min_area_m2",
+    "min_floor_number",
+    "min_floor_total",
+    "wants_furnished",
+)
 
 
 @router.post("/search-url")

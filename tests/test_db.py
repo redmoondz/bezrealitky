@@ -40,6 +40,7 @@ class RowFromListingTests(TestCase):
         listing = Listing(
             listing_id="1",
             pets_friendly="True",
+            furnished="True",
             air_conditioning="False",
             has_washing_machine="True",
             has_dryer="",
@@ -56,6 +57,7 @@ class RowFromListingTests(TestCase):
         )
         row = db.row_from_listing(listing)
         self.assertIs(row["pets_friendly"], True)
+        self.assertIs(row["furnished"], True)
         self.assertIs(row["air_conditioning"], False)
         self.assertIs(row["has_washing_machine"], True)
         self.assertIsNone(row["has_dryer"])

@@ -74,6 +74,7 @@ _INTEGER_COLUMNS = ("floor_number", "floor_total")
 
 _BOOLEAN_COLUMNS = (
     "pets_friendly",
+    "furnished",
     "air_conditioning",
     "has_washing_machine",
     "has_dryer",
@@ -120,6 +121,7 @@ CREATE TABLE IF NOT EXISTS listings (
     condition TEXT NOT NULL DEFAULT '',
     surroundings TEXT NOT NULL DEFAULT '',
     pets_friendly BOOLEAN,
+    furnished BOOLEAN,
     air_conditioning BOOLEAN,
     has_washing_machine BOOLEAN,
     has_dryer BOOLEAN,
@@ -150,6 +152,7 @@ CREATE TABLE IF NOT EXISTS listings (
 -- listings existed before these columns were added; CREATE TABLE IF NOT EXISTS
 -- above is a no-op against an already-deployed table, so new columns need an
 -- explicit, idempotent ALTER here to reach a running database.
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS furnished BOOLEAN;
 ALTER TABLE listings ADD COLUMN IF NOT EXISTS construction TEXT NOT NULL DEFAULT '';
 ALTER TABLE listings ADD COLUMN IF NOT EXISTS condition TEXT NOT NULL DEFAULT '';
 ALTER TABLE listings ADD COLUMN IF NOT EXISTS surroundings TEXT NOT NULL DEFAULT '';
@@ -201,8 +204,17 @@ CREATE TABLE IF NOT EXISTS user_preferences (
     wants_pets BOOLEAN,
     budget_total_price NUMERIC,
     min_area_m2 NUMERIC,
+    min_floor_number NUMERIC,
+    min_floor_total NUMERIC,
+    wants_furnished BOOLEAN,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- user_preferences existed before these columns were added — same
+-- already-deployed-table caveat as the ALTER block above listings.
+ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS min_floor_number NUMERIC;
+ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS min_floor_total NUMERIC;
+ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS wants_furnished BOOLEAN;
 
 CREATE TABLE IF NOT EXISTS user_listing_relevance (
     telegram_user_id BIGINT NOT NULL REFERENCES bot_users (telegram_user_id) ON DELETE CASCADE,
@@ -583,6 +595,29 @@ def fetch_listing(conn: psycopg.Connection, listing_id: str) -> dict | None:
         return cursor.fetchone()
 
 
+def fetch_listings_missing_pets_friendly(conn: psycopg.Connection) -> list[dict]:
+    """Listings with an unresolved ``pets_friendly`` (``NULL``) that still have
+    a description to reclassify — used by the one-off pets backfill
+    (:mod:`src.backfill_pets`) for rows scraped before the description-fallback
+    existed, or before a taxonomy fix started catching cases it used to miss.
+    """
+    with conn.cursor() as cursor:
+        cursor.execute(
+            "SELECT listing_id, description FROM listings "
+            "WHERE pets_friendly IS NULL AND description <> ''"
+        )
+        return cursor.fetchall()
+
+
+def update_pets_friendly(conn: psycopg.Connection, listing_id: str, value: bool) -> None:
+    with conn.transaction():
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "UPDATE listings SET pets_friendly = %s WHERE listing_id = %s",
+                (value, listing_id),
+            )
+
+
 def get_relevance_score(conn: psycopg.Connection, telegram_user_id: int, listing_id: str) -> int:
     """This user's score for this listing, or 0 if it isn't (or is no longer)
     relevant to them — matches ``user_listing_relevance.score``'s own default.
@@ -620,15 +655,22 @@ def set_user_language(conn: psycopg.Connection, telegram_user_id: int, language_
             )
 
 
-_PREFERENCE_COLUMNS = ("wants_pets", "budget_total_price", "min_area_m2")
+_PREFERENCE_COLUMNS = (
+    "wants_pets",
+    "budget_total_price",
+    "min_area_m2",
+    "min_floor_number",
+    "min_floor_total",
+    "wants_furnished",
+)
 
-_NO_PREFERENCES = {"wants_pets": None, "budget_total_price": None, "min_area_m2": None}
+_NO_PREFERENCES = {column: None for column in _PREFERENCE_COLUMNS}
 
 
 def get_user_preferences(conn: psycopg.Connection, telegram_user_id: int) -> dict:
     with conn.cursor() as cursor:
         cursor.execute(
-            "SELECT wants_pets, budget_total_price, min_area_m2 FROM user_preferences "
+            f"SELECT {', '.join(_PREFERENCE_COLUMNS)} FROM user_preferences "
             "WHERE telegram_user_id = %s",
             (telegram_user_id,),
         )
@@ -691,7 +733,8 @@ def reset_user_onboarding(conn: psycopg.Connection, telegram_user_id: int) -> No
             )
             cursor.execute(
                 "UPDATE user_preferences SET wants_pets = NULL, budget_total_price = NULL, "
-                "min_area_m2 = NULL, updated_at = now() WHERE telegram_user_id = %s",
+                "min_area_m2 = NULL, min_floor_number = NULL, min_floor_total = NULL, "
+                "wants_furnished = NULL, updated_at = now() WHERE telegram_user_id = %s",
                 (telegram_user_id,),
             )
 

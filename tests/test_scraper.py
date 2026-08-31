@@ -92,6 +92,8 @@ class ScraperTests(TestCase):
         self.assertEqual(listing.floor, "2. floor out of 2")
         self.assertEqual(listing.floor_number, "2")
         self.assertEqual(listing.floor_total, "2")
+        self.assertEqual(listing.fully_furnished, "Partly")
+        self.assertEqual(listing.furnished, "")
         self.assertEqual(listing.construction, "Brick")
         self.assertEqual(listing.condition, "New-build")
         self.assertEqual(listing.surroundings, "Centre")

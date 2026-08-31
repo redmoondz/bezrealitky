@@ -31,6 +31,7 @@ from src.scraper import parse_number
 from .. import config, i18n, notify_loop
 from ..access import IsAllowed, denial_text_for
 from ..keyboards import (
+    furniture_preference_keyboard,
     language_keyboard,
     onboarding_keyboard,
     pets_preference_keyboard,
@@ -46,6 +47,9 @@ class Onboarding(StatesGroup):
     waiting_for_pets = State()
     waiting_for_budget = State()
     waiting_for_area = State()
+    waiting_for_floor_number = State()
+    waiting_for_floor_total = State()
+    waiting_for_furniture = State()
 
 
 _DEFAULT_CURRENCY = "CZK"
@@ -156,6 +160,33 @@ async def _ask_area(message: Message, state: FSMContext) -> None:
     language = data.get("language", "en")
     await state.set_state(Onboarding.waiting_for_area)
     await message.answer(i18n.t("area_prompt", language), reply_markup=skip_keyboard("area_pref:skip", language))
+
+
+async def _ask_floor_number(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    language = data.get("language", "en")
+    await state.set_state(Onboarding.waiting_for_floor_number)
+    await message.answer(
+        i18n.t("floor_number_prompt", language), reply_markup=skip_keyboard("floor_number_pref:skip", language)
+    )
+
+
+async def _ask_floor_total(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    language = data.get("language", "en")
+    await state.set_state(Onboarding.waiting_for_floor_total)
+    await message.answer(
+        i18n.t("floor_total_prompt", language), reply_markup=skip_keyboard("floor_total_pref:skip", language)
+    )
+
+
+async def _ask_furniture(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    language = data.get("language", "en")
+    await state.set_state(Onboarding.waiting_for_furniture)
+    await message.answer(
+        i18n.t("furniture_prompt", language), reply_markup=furniture_preference_keyboard(language)
+    )
 
 
 async def _finish_onboarding_from_state(message: Message, telegram_user_id: int, state: FSMContext) -> None:
@@ -299,12 +330,65 @@ async def onboarding_area_answered(message: Message, state: FSMContext) -> None:
         await message.answer(i18n.t("number_retry", language), reply_markup=skip_keyboard("area_pref:skip", language))
         return
     await asyncio.to_thread(_save_preference, message.from_user.id, "min_area_m2", value)
-    await _finish_onboarding_from_state(message, message.from_user.id, state)
+    await _ask_floor_number(message, state)
 
 
 @router.callback_query(Onboarding.waiting_for_area, F.data == "area_pref:skip")
 async def onboarding_area_skipped(query: CallbackQuery, state: FSMContext) -> None:
     await query.answer()
+    if query.message:
+        await _ask_floor_number(query.message, state)
+
+
+@router.message(Onboarding.waiting_for_floor_number, F.text, ~F.text.startswith("/"))
+async def onboarding_floor_number_answered(message: Message, state: FSMContext) -> None:
+    value = _parse_preference_number(message.text)
+    if value is None:
+        data = await state.get_data()
+        language = data.get("language", "en")
+        await message.answer(
+            i18n.t("number_retry", language), reply_markup=skip_keyboard("floor_number_pref:skip", language)
+        )
+        return
+    await asyncio.to_thread(_save_preference, message.from_user.id, "min_floor_number", value)
+    await _ask_floor_total(message, state)
+
+
+@router.callback_query(Onboarding.waiting_for_floor_number, F.data == "floor_number_pref:skip")
+async def onboarding_floor_number_skipped(query: CallbackQuery, state: FSMContext) -> None:
+    await query.answer()
+    if query.message:
+        await _ask_floor_total(query.message, state)
+
+
+@router.message(Onboarding.waiting_for_floor_total, F.text, ~F.text.startswith("/"))
+async def onboarding_floor_total_answered(message: Message, state: FSMContext) -> None:
+    value = _parse_preference_number(message.text)
+    if value is None:
+        data = await state.get_data()
+        language = data.get("language", "en")
+        await message.answer(
+            i18n.t("number_retry", language), reply_markup=skip_keyboard("floor_total_pref:skip", language)
+        )
+        return
+    await asyncio.to_thread(_save_preference, message.from_user.id, "min_floor_total", value)
+    await _ask_furniture(message, state)
+
+
+@router.callback_query(Onboarding.waiting_for_floor_total, F.data == "floor_total_pref:skip")
+async def onboarding_floor_total_skipped(query: CallbackQuery, state: FSMContext) -> None:
+    await query.answer()
+    if query.message:
+        await _ask_furniture(query.message, state)
+
+
+@router.callback_query(Onboarding.waiting_for_furniture, F.data.startswith("furniture_pref:"))
+async def onboarding_furniture_answered(query: CallbackQuery, state: FSMContext) -> None:
+    answer = query.data.split(":", 1)[1]
+    wants_furnished = {"yes": True, "no": False, "skip": None}.get(answer)
+    await query.answer()
+    if answer != "skip":
+        await asyncio.to_thread(_save_preference, query.from_user.id, "wants_furnished", wants_furnished)
     if query.message:
         await _finish_onboarding_from_state(query.message, query.from_user.id, state)
 

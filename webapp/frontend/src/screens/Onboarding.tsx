@@ -5,9 +5,18 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import type { SyncSummary } from '../types'
 
-type Step = 'language' | 'search-url' | 'pets' | 'budget' | 'area' | 'running' | 'done'
+type Step =
+  | 'language'
+  | 'search-url'
+  | 'pets'
+  | 'budget'
+  | 'area'
+  | 'floor'
+  | 'furniture'
+  | 'running'
+  | 'done'
 
-const STEP_ORDER: Step[] = ['language', 'search-url', 'pets', 'budget', 'area']
+const STEP_ORDER: Step[] = ['language', 'search-url', 'pets', 'budget', 'area', 'floor', 'furniture']
 
 function ProgressDots({ step }: { step: Step }) {
   const index = STEP_ORDER.indexOf(step)
@@ -29,6 +38,8 @@ export default function Onboarding() {
   const [searchUrlInput, setSearchUrlInput] = useState('')
   const [budgetInput, setBudgetInput] = useState('')
   const [areaInput, setAreaInput] = useState('')
+  const [floorNumberInput, setFloorNumberInput] = useState('')
+  const [floorTotalInput, setFloorTotalInput] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [summary, setSummary] = useState<SyncSummary | null>(null)
   const navigate = useNavigate()
@@ -89,6 +100,23 @@ export default function Onboarding() {
         await setPreferences.mutateAsync({ min_area_m2: value })
       }
     }
+    setStep('floor')
+  }
+
+  async function submitFloor(skip: boolean) {
+    if (!skip) {
+      const payload: { min_floor_number?: number; min_floor_total?: number } = {}
+      const floorNumber = Number(floorNumberInput)
+      if (Number.isFinite(floorNumber) && floorNumberInput.trim()) payload.min_floor_number = floorNumber
+      const floorTotal = Number(floorTotalInput)
+      if (Number.isFinite(floorTotal) && floorTotalInput.trim()) payload.min_floor_total = floorTotal
+      if (Object.keys(payload).length) await setPreferences.mutateAsync(payload)
+    }
+    setStep('furniture')
+  }
+
+  async function submitFurniture(wantsFurnished: boolean | null) {
+    if (wantsFurnished !== null) await setPreferences.mutateAsync({ wants_furnished: wantsFurnished })
     setStep('running')
     finish.mutate()
   }
@@ -233,6 +261,60 @@ export default function Onboarding() {
             Continue
           </button>
           <button className="btn btn--ghost btn--block" onClick={() => submitArea(true)}>
+            Skip
+          </button>
+        </div>
+      )}
+
+      {step === 'floor' && (
+        <div className="stack">
+          <h1 className="screen-title">🪜 Floor</h1>
+          <p className="listing-card__meta">
+            Any minimum floor for the apartment itself, or minimum number of floors in the
+            building? Leave either blank if you don't care.
+          </p>
+          <div className="field">
+            <label htmlFor="floor-number">Minimum apartment floor</label>
+            <input
+              id="floor-number"
+              inputMode="numeric"
+              value={floorNumberInput}
+              onChange={(event) => setFloorNumberInput(event.target.value)}
+              placeholder="e.g. 1 (not ground floor)"
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="floor-total">Minimum building height (floors)</label>
+            <input
+              id="floor-total"
+              inputMode="numeric"
+              value={floorTotalInput}
+              onChange={(event) => setFloorTotalInput(event.target.value)}
+              placeholder="e.g. 4"
+            />
+          </div>
+          <button className="btn btn--primary btn--block" onClick={() => submitFloor(false)}>
+            Continue
+          </button>
+          <button className="btn btn--ghost btn--block" onClick={() => submitFloor(true)}>
+            Skip
+          </button>
+        </div>
+      )}
+
+      {step === 'furniture' && (
+        <div className="stack">
+          <h1 className="screen-title">🛋 Furnished?</h1>
+          <p className="listing-card__meta">Do you want a place that's already furnished?</p>
+          <div className="row">
+            <button className="btn btn--primary" onClick={() => submitFurniture(true)}>
+              Yes
+            </button>
+            <button className="btn btn--ghost" onClick={() => submitFurniture(false)}>
+              No
+            </button>
+          </div>
+          <button className="btn btn--ghost btn--block" onClick={() => submitFurniture(null)}>
             Skip
           </button>
         </div>

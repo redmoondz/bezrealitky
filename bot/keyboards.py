@@ -52,6 +52,22 @@ def pets_preference_keyboard(language: str) -> InlineKeyboardMarkup:
     )
 
 
+def furniture_preference_keyboard(language: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=i18n.t("furniture_yes_button", language), callback_data="furniture_pref:yes"
+                ),
+                InlineKeyboardButton(
+                    text=i18n.t("furniture_no_button", language), callback_data="furniture_pref:no"
+                ),
+            ],
+            [InlineKeyboardButton(text=i18n.t("skip_button", language), callback_data="furniture_pref:skip")],
+        ]
+    )
+
+
 def skip_keyboard(callback_data: str, language: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[[InlineKeyboardButton(text=i18n.t("skip_button", language), callback_data=callback_data)]]

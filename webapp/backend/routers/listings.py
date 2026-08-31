@@ -29,6 +29,7 @@ def _card(row: dict, language: str) -> ListingCard:
         area=row.get("area"),
         format=row.get("format") or "",
         fully_furnished=row.get("fully_furnished") or "",
+        furnished=row.get("furnished"),
         floor_number=row.get("floor_number"),
         floor_total=row.get("floor_total"),
         floor=row.get("floor") or "",
