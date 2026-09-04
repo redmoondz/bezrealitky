@@ -56,45 +56,114 @@ _TEXTS: dict[str, dict[str, str]] = {
         "uk": "🔄 Онбординг скинуто — почнімо знову.",
     },
     "onboarding_prompt": {
+        "en": "🔑 <b>One more thing — let's personalize your search.</b> I'll ask a few quick questions.",
+        "cs": "🔑 <b>Ještě jedna věc — přizpůsobme si vyhledávání.</b> Položím vám pár rychlých otázek.",
+        "ru": "🔑 <b>Ещё один шаг — настроим поиск под вас.</b> Задам несколько коротких вопросов.",
+        "uk": "🔑 <b>Ще один крок — налаштуємо пошук під вас.</b> Постав кілька коротких запитань.",
+    },
+    "offer_type_prompt": {
+        "en": "🔑 Are you looking to rent or buy?",
+        "cs": "🔑 Hledáte pronájem, nebo koupi?",
+        "ru": "🔑 Вы ищете аренду или покупку?",
+        "uk": "🔑 Ви шукаєте оренду чи купівлю?",
+    },
+    "offer_type_rent_button": {
+        "en": "🏠 Rent",
+        "cs": "🏠 Pronájem",
+        "ru": "🏠 Аренда",
+        "uk": "🏠 Оренда",
+    },
+    "offer_type_buy_button": {
+        "en": "🏷 Buy",
+        "cs": "🏷 Koupě",
+        "ru": "🏷 Покупка",
+        "uk": "🏷 Купівля",
+    },
+    "estate_type_prompt": {
+        "en": "🏠 What kind of property?",
+        "cs": "🏠 O jaký typ nemovitosti jde?",
+        "ru": "🏠 Какой тип недвижимости?",
+        "uk": "🏠 Який тип нерухомості?",
+    },
+    "estate_type_apartment_button": {
+        "en": "🏢 Apartment",
+        "cs": "🏢 Byt",
+        "ru": "🏢 Квартира",
+        "uk": "🏢 Квартира",
+    },
+    "estate_type_house_button": {
+        "en": "🏡 House",
+        "cs": "🏡 Dům",
+        "ru": "🏡 Дом",
+        "uk": "🏡 Будинок",
+    },
+    "estate_type_land_button": {
+        "en": "🌳 Land",
+        "cs": "🌳 Pozemek",
+        "ru": "🌳 Участок",
+        "uk": "🌳 Ділянка",
+    },
+    "estate_type_garage_button": {
+        "en": "🚗 Garage",
+        "cs": "🚗 Garáž",
+        "ru": "🚗 Гараж",
+        "uk": "🚗 Гараж",
+    },
+    "currency_prompt": {
+        "en": "💱 Which currency should prices be shown in?",
+        "cs": "💱 V jaké měně chcete zobrazovat ceny?",
+        "ru": "💱 В какой валюте показывать цены?",
+        "uk": "💱 У якій валюті показувати ціни?",
+    },
+    "location_prompt": {
         "en": (
-            "🔗 <b>One more thing — let's personalize your search.</b>\n\n"
-            "Send me the link to your search results on bezrealitky.com:\n"
-            "1️⃣ Open bezrealitky.com and set your filters (city, price, rooms…)\n"
-            "2️⃣ Run the search so the results page loads\n"
-            "3️⃣ Copy the URL from your browser's address bar\n"
-            "4️⃣ Paste it here as a message\n\n"
-            "Or tap the button below to start with the project's default search instead — "
-            "you can always change it later with /parse_custom."
+            "📍 Which city or region in the Czech Republic? Send a name (e.g. \"Brno\" or "
+            "\"Praha 5\"), or tap the button to search the whole country."
         ),
         "cs": (
-            "🔗 <b>Ještě jedna věc — přizpůsobme si vyhledávání.</b>\n\n"
-            "Pošlete mi odkaz na výsledky vyhledávání na bezrealitky.com:\n"
-            "1️⃣ Otevřete bezrealitky.com a nastavte filtry (město, cena, počet pokojů…)\n"
-            "2️⃣ Spusťte vyhledávání, aby se načetla stránka s výsledky\n"
-            "3️⃣ Zkopírujte URL adresu z adresního řádku prohlížeče\n"
-            "4️⃣ Vložte ji sem jako zprávu\n\n"
-            "Nebo klepněte na tlačítko níže a začněte s výchozím vyhledáváním projektu — "
-            "kdykoli ho můžete později změnit pomocí /parse_custom."
+            "📍 Jaké město nebo kraj v Česku? Pošlete název (např. „Brno“ nebo „Praha 5“), "
+            "nebo klepněte na tlačítko a prohledejte celou zemi."
         ),
         "ru": (
-            "🔗 <b>Ещё один шаг — настроим поиск под вас.</b>\n\n"
-            "Пришлите мне ссылку на результаты поиска на bezrealitky.com:\n"
-            "1️⃣ Откройте bezrealitky.com и задайте фильтры (город, цена, количество комнат…)\n"
-            "2️⃣ Запустите поиск, чтобы загрузилась страница результатов\n"
-            "3️⃣ Скопируйте URL из адресной строки браузера\n"
-            "4️⃣ Вставьте его сюда сообщением\n\n"
-            "Либо нажмите кнопку ниже, чтобы начать со стандартного поиска проекта — "
-            "вы всегда сможете изменить его позже командой /parse_custom."
+            "📍 Какой город или регион в Чехии? Отправьте название (например, «Brno» или "
+            "«Praha 5») или нажмите кнопку, чтобы искать по всей стране."
         ),
         "uk": (
-            "🔗 <b>Ще один крок — налаштуємо пошук під вас.</b>\n\n"
-            "Надішліть мені посилання на результати пошуку на bezrealitky.com:\n"
-            "1️⃣ Відкрийте bezrealitky.com і встановіть фільтри (місто, ціна, кількість кімнат…)\n"
-            "2️⃣ Запустіть пошук, щоб завантажилася сторінка результатів\n"
-            "3️⃣ Скопіюйте URL з адресного рядка браузера\n"
-            "4️⃣ Вставте його сюди повідомленням\n\n"
-            "Або натисніть кнопку нижче, щоб почати зі стандартного пошуку проєкту — "
-            "ви завжди зможете змінити його пізніше командою /parse_custom."
+            "📍 Яке місто чи регіон у Чехії? Надішліть назву (наприклад, «Brno» або "
+            "«Praha 5») або натисніть кнопку, щоб шукати по всій країні."
+        ),
+    },
+    "whole_country_button": {
+        "en": "🌍 Search the whole country",
+        "cs": "🌍 Prohledat celou zemi",
+        "ru": "🌍 Искать по всей стране",
+        "uk": "🌍 Шукати по всій країні",
+    },
+    "location_not_found": {
+        "en": "Couldn't find a Czech city or region matching that: {error}\n\nTry again, or tap the button to search the whole country.",
+        "cs": "Nepodařilo se najít české město nebo kraj podle tohoto zadání: {error}\n\nZkuste to znovu, nebo klepněte na tlačítko a prohledejte celou zemi.",
+        "ru": "Не удалось найти город или регион в Чехии по этому запросу: {error}\n\nПопробуйте снова или нажмите кнопку, чтобы искать по всей стране.",
+        "uk": "Не вдалося знайти місто чи регіон у Чехії за цим запитом: {error}\n\nСпробуйте ще раз або натисніть кнопку, щоб шукати по всій країні.",
+    },
+    "price_to_prompt": {
+        "en": (
+            "💵 Maximum price, in <b>{currency}</b>? This filters the search itself — "
+            "listings above it won't show up. Send a plain number, or tap Skip for no limit."
+        ),
+        "cs": (
+            "💵 Maximální cena v <b>{currency}</b>? Tím se vyhledávání skutečně filtruje — "
+            "inzeráty nad tuto cenu se nezobrazí. Pošlete prosté číslo, nebo klepněte na "
+            "Přeskočit pro neomezenou cenu."
+        ),
+        "ru": (
+            "💵 Максимальная цена в <b>{currency}</b>? Это реально фильтрует поиск — "
+            "объявления дороже не покажутся. Отправьте просто число или нажмите "
+            "«Пропустить», чтобы не ограничивать."
+        ),
+        "uk": (
+            "💵 Максимальна ціна в <b>{currency}</b>? Це справді фільтрує пошук — "
+            "оголошення дорожчі не показуватимуться. Надішліть просто число або натисніть "
+            "«Пропустити», щоб не обмежувати."
         ),
     },
     "pets_prompt": {
@@ -203,24 +272,6 @@ _TEXTS: dict[str, dict[str, str]] = {
         "uk": (
             "👀 Збережено! Зовсім нових з минулого разу немає, але досі чекають на вашу "
             "реакцію: {count} оголошень — перегляньте їх через /list або в Mini App."
-        ),
-    },
-    "onboarding_invalid_url": {
-        "en": (
-            "That doesn't look like a valid bezrealitky.com search link: {error}\n\n"
-            "Please try again, or tap the button to use the default search instead."
-        ),
-        "cs": (
-            "To nevypadá jako platný odkaz na vyhledávání bezrealitky.com: {error}\n\n"
-            "Zkuste to prosím znovu, nebo klepněte na tlačítko a použijte výchozí vyhledávání."
-        ),
-        "ru": (
-            "Это не похоже на действительную ссылку поиска bezrealitky.com: {error}\n\n"
-            "Попробуйте ещё раз или нажмите кнопку, чтобы использовать поиск по умолчанию."
-        ),
-        "uk": (
-            "Це не схоже на дійсне посилання пошуку bezrealitky.com: {error}\n\n"
-            "Спробуйте ще раз або натисніть кнопку, щоб використати пошук за замовчуванням."
         ),
     },
     "onboarding_scrape_failed": {
@@ -488,12 +539,6 @@ _TEXTS: dict[str, dict[str, str]] = {
             "ігноруються.\n"
             "Приклад: /parse_custom --price-from 500 --price-to 1200\n\n"
         ),
-    },
-    "use_default_search_button": {
-        "en": "▶️ Use the default search",
-        "cs": "▶️ Použít výchozí vyhledávání",
-        "ru": "▶️ Использовать поиск по умолчанию",
-        "uk": "▶️ Використати пошук за замовчуванням",
     },
     "pets_yes_button": {
         "en": "🐾 Yes",

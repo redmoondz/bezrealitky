@@ -7,7 +7,11 @@ import type { SyncSummary } from '../types'
 
 type Step =
   | 'language'
-  | 'search-url'
+  | 'offer-type'
+  | 'estate-type'
+  | 'currency'
+  | 'location'
+  | 'price'
   | 'pets'
   | 'budget'
   | 'area'
@@ -16,7 +20,36 @@ type Step =
   | 'running'
   | 'done'
 
-const STEP_ORDER: Step[] = ['language', 'search-url', 'pets', 'budget', 'area', 'floor', 'furniture']
+const STEP_ORDER: Step[] = [
+  'language',
+  'offer-type',
+  'estate-type',
+  'currency',
+  'location',
+  'price',
+  'pets',
+  'budget',
+  'area',
+  'floor',
+  'furniture',
+]
+
+const OFFER_TYPES = [
+  { value: 'PRONAJEM', label: 'Rent' },
+  { value: 'PRODEJ', label: 'Buy' },
+]
+
+const ESTATE_TYPES = [
+  { value: 'BYT', label: 'Apartment' },
+  { value: 'DUM', label: 'House' },
+  { value: 'POZEMEK', label: 'Land' },
+  { value: 'GARAZ', label: 'Garage' },
+]
+
+const CURRENCIES = [
+  { value: 'CZK', label: 'CZK' },
+  { value: 'EUR', label: 'EUR' },
+]
 
 function ProgressDots({ step }: { step: Step }) {
   const index = STEP_ORDER.indexOf(step)
@@ -35,7 +68,11 @@ function ProgressDots({ step }: { step: Step }) {
 
 export default function Onboarding() {
   const [step, setStep] = useState<Step>('language')
-  const [searchUrlInput, setSearchUrlInput] = useState('')
+  const [offerType, setOfferType] = useState('')
+  const [estateType, setEstateType] = useState('')
+  const [currency, setCurrency] = useState('')
+  const [locationInput, setLocationInput] = useState('')
+  const [priceToInput, setPriceToInput] = useState('')
   const [budgetInput, setBudgetInput] = useState('')
   const [areaInput, setAreaInput] = useState('')
   const [floorNumberInput, setFloorNumberInput] = useState('')
@@ -47,7 +84,7 @@ export default function Onboarding() {
 
   const languages = useQuery({ queryKey: ['languages'], queryFn: api.languages })
   const setLanguage = useMutation({ mutationFn: (code: string) => api.setLanguage(code) })
-  const setSearchUrl = useMutation({ mutationFn: (url?: string) => api.setOnboardingSearchUrl(url) })
+  const setSearch = useMutation({ mutationFn: api.setOnboardingSearch })
   const setPreferences = useMutation({ mutationFn: api.setOnboardingPreferences })
   const finish = useMutation({
     mutationFn: api.finishOnboarding,
@@ -62,19 +99,47 @@ export default function Onboarding() {
     setError(null)
     try {
       await setLanguage.mutateAsync(code)
-      setStep('search-url')
+      setStep('offer-type')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save that language.')
     }
   }
 
-  async function submitSearchUrl(useDefault: boolean) {
+  function chooseOfferType(value: string) {
+    setOfferType(value)
+    setStep('estate-type')
+  }
+
+  function chooseEstateType(value: string) {
+    setEstateType(value)
+    setStep('currency')
+  }
+
+  function chooseCurrency(value: string) {
+    setCurrency(value)
+    setStep('location')
+  }
+
+  function submitLocation(skip: boolean) {
     setError(null)
+    if (skip) setLocationInput('')
+    setStep('price')
+  }
+
+  async function submitPrice(skip: boolean) {
+    setError(null)
+    const priceTo = !skip && priceToInput.trim() ? Number(priceToInput) : undefined
     try {
-      await setSearchUrl.mutateAsync(useDefault ? undefined : searchUrlInput)
+      await setSearch.mutateAsync({
+        offer_type: offerType,
+        estate_type: estateType,
+        currency,
+        location: locationInput.trim() || undefined,
+        price_to: Number.isFinite(priceTo) ? priceTo : undefined,
+      })
       setStep('pets')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'That doesn’t look like a bezrealitky.com search link.')
+      setError(err instanceof Error ? err.message : 'Could not save your search — try a different location.')
     }
   }
 
@@ -171,30 +236,93 @@ export default function Onboarding() {
         </div>
       )}
 
-      {step === 'search-url' && (
+      {step === 'offer-type' && (
         <div className="stack">
-          <h1 className="screen-title">Your search</h1>
+          <h1 className="screen-title">Looking to rent or buy?</h1>
+          <div className="option-list">
+            {OFFER_TYPES.map((option) => (
+              <button key={option.value} onClick={() => chooseOfferType(option.value)}>
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {step === 'estate-type' && (
+        <div className="stack">
+          <h1 className="screen-title">What kind of property?</h1>
+          <div className="option-list">
+            {ESTATE_TYPES.map((option) => (
+              <button key={option.value} onClick={() => chooseEstateType(option.value)}>
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {step === 'currency' && (
+        <div className="stack">
+          <h1 className="screen-title">Which currency?</h1>
+          <div className="option-list">
+            {CURRENCIES.map((option) => (
+              <button key={option.value} onClick={() => chooseCurrency(option.value)}>
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {step === 'location' && (
+        <div className="stack">
+          <h1 className="screen-title">📍 Where?</h1>
           <p className="listing-card__meta">
-            Open bezrealitky.com, set your filters, run the search, then paste the resulting URL here.
+            A city or region in the Czech Republic, e.g. "Brno" or "Praha 5". Leave blank to search the
+            whole country.
           </p>
           <div className="field">
-            <label htmlFor="search-url">Search URL</label>
+            <label htmlFor="location">City or region</label>
             <input
-              id="search-url"
-              value={searchUrlInput}
-              onChange={(event) => setSearchUrlInput(event.target.value)}
-              placeholder="https://www.bezrealitky.com/search?..."
+              id="location"
+              value={locationInput}
+              onChange={(event) => setLocationInput(event.target.value)}
+              placeholder="Brno"
+            />
+          </div>
+          <button className="btn btn--primary btn--block" onClick={() => submitLocation(false)}>
+            Continue
+          </button>
+          <button className="btn btn--ghost btn--block" onClick={() => submitLocation(true)}>
+            Search the whole country
+          </button>
+        </div>
+      )}
+
+      {step === 'price' && (
+        <div className="stack">
+          <h1 className="screen-title">💵 Maximum price</h1>
+          <p className="listing-card__meta">Only show listings up to this price, in {currency || 'your chosen currency'}.</p>
+          <div className="field">
+            <label htmlFor="price-to">Maximum price</label>
+            <input
+              id="price-to"
+              inputMode="numeric"
+              value={priceToInput}
+              onChange={(event) => setPriceToInput(event.target.value)}
+              placeholder="Amount"
             />
           </div>
           <button
             className="btn btn--primary btn--block"
-            disabled={!searchUrlInput.trim() || setSearchUrl.isPending}
-            onClick={() => submitSearchUrl(false)}
+            disabled={setSearch.isPending}
+            onClick={() => submitPrice(false)}
           >
-            Use this search
+            Continue
           </button>
-          <button className="btn btn--ghost btn--block" onClick={() => submitSearchUrl(true)}>
-            Use the default search instead
+          <button className="btn btn--ghost btn--block" disabled={setSearch.isPending} onClick={() => submitPrice(true)}>
+            Skip
           </button>
         </div>
       )}

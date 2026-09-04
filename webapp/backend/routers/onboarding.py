@@ -1,9 +1,9 @@
 """Onboarding endpoints — mirrors ``bot/handlers/start.py``'s ``Onboarding``
-FSM (language is handled by ``routers/meta.py``; this covers the saved-search
-URL-or-default step and the pets/budget/area/floor/furniture preference
-steps). Each step is independently skippable, same as the bot: the frontend
-wizard calls each endpoint once per step and simply omits a field to mean
-"skip", rather than the bot's server-side FSM state.
+FSM (language is handled by ``routers/meta.py``; this covers the search-setup
+questions and the pets/budget/area/floor/furniture preference steps). Each
+step is independently skippable, same as the bot: the frontend wizard calls
+each endpoint once per step and simply omits a field to mean "skip", rather
+than the bot's server-side FSM state.
 """
 
 from __future__ import annotations
@@ -13,11 +13,12 @@ import asyncio
 from fastapi import APIRouter, Depends, HTTPException
 
 from src import db
-from src.configuration import ConfigurationError, load_config, validate_search_url
+from src.configuration import ConfigurationError, build_search_url, load_config
+from src.geocoding import GeocodingError, resolve_location
 from src.scheduler import run_once_for_user
 
 from ..deps import run_db
-from ..schemas import PreferencesRequest, SearchUrlRequest, SyncSummary, TelegramUser
+from ..schemas import PreferencesRequest, SearchSetupRequest, SyncSummary, TelegramUser
 from ..telegram_auth import get_current_telegram_user
 
 router = APIRouter(prefix="/onboarding", tags=["onboarding"])
@@ -32,18 +33,26 @@ _PREFERENCE_FIELDS = (
 )
 
 
-@router.post("/search-url")
-async def set_search_url(
-    payload: SearchUrlRequest, user: TelegramUser = Depends(get_current_telegram_user)
+@router.post("/search")
+async def set_search(
+    payload: SearchSetupRequest, user: TelegramUser = Depends(get_current_telegram_user)
 ) -> dict:
-    if payload.url:
+    location = None
+    if payload.location:
         try:
-            search_url = validate_search_url(payload.url)
-        except ConfigurationError as exc:
+            location = await asyncio.to_thread(resolve_location, payload.location)
+        except GeocodingError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-    else:
-        base_config = await asyncio.to_thread(load_config)
-        search_url = base_config["search"]["url"]
+    try:
+        search_url = build_search_url(
+            offer_type=payload.offer_type,
+            estate_type=payload.estate_type,
+            currency=payload.currency,
+            location=location,
+            price_to=payload.price_to,
+        )
+    except ConfigurationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     await run_db(db.set_user_search, user.id, search_url)
     return {"search_url": search_url}
 

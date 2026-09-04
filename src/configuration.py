@@ -17,6 +17,14 @@ ALLOWED_HOSTS = {"bezrealitky.com", "www.bezrealitky.com"}
 MARKDOWN_LINK_RE = re.compile(r"^\s*\[[^]]*]\((https?://.+)\)\s*$", re.IGNORECASE)
 MAX_PRICE = 1_000_000_000
 
+# Confirmed live against bezrealitky.com/search (invalid values render a 500
+# page rather than an empty result set, so these are read from the site's own
+# behavior, not guessed): offerType=rent vs. sale, estateType=what kind of
+# property, currency=how price filters/labels are interpreted.
+OFFER_TYPES = ("PRONAJEM", "PRODEJ")
+ESTATE_TYPES = ("BYT", "DUM", "POZEMEK", "GARAZ")
+CURRENCIES = ("CZK", "EUR")
+
 
 class ConfigurationError(ValueError):
     """Raised when the YAML configuration or CLI values are invalid."""
@@ -93,6 +101,37 @@ def set_url_prices(url: str, price_from: int | None, price_to: int | None) -> st
     updated = urlunparse(parsed._replace(query=urlencode(params, doseq=True)))
     validate_price_range(updated)
     return updated
+
+
+def build_search_url(
+    *,
+    offer_type: str,
+    estate_type: str,
+    currency: str,
+    location: tuple[str, str] | None = None,
+    price_to: int | None = None,
+) -> str:
+    """Assembles a bezrealitky.com ``/search`` URL from onboarding answers —
+    the backend-built replacement for asking a user to paste one themselves.
+    ``location`` is ``(osm_value, region_osm_id)``, e.g. the pair
+    :func:`src.geocoding.resolve_location` returns; omit it for a
+    nationwide search.
+    """
+    if offer_type not in OFFER_TYPES:
+        raise ConfigurationError(f"offer_type must be one of {OFFER_TYPES}")
+    if estate_type not in ESTATE_TYPES:
+        raise ConfigurationError(f"estate_type must be one of {ESTATE_TYPES}")
+    if currency not in CURRENCIES:
+        raise ConfigurationError(f"currency must be one of {CURRENCIES}")
+
+    params = [("estateType", estate_type), ("offerType", offer_type), ("currency", currency)]
+    if location is not None:
+        osm_value, region_osm_id = location
+        params += [("osm_value", osm_value), ("regionOsmIds", region_osm_id), ("location", "exact")]
+    url = urlunparse(("https", "www.bezrealitky.com", "/search", "", urlencode(params), ""))
+    if price_to is not None:
+        url = set_url_prices(url, None, price_to)
+    return validate_search_url(url)
 
 
 def validate_config(config: dict) -> dict:

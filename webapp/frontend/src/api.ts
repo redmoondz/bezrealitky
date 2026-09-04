@@ -14,6 +14,7 @@ import type {
   PreferencesPayload,
   Reaction,
   SearchResponse,
+  SearchSetupPayload,
   SearchUpdatePayload,
   SearchUpdateResponse,
   SyncSummary,
@@ -61,8 +62,8 @@ export const api = {
   setLanguage: (code: string) => post<{ ok: boolean }>('/language', { code }),
   help: () => get<HelpResponse>('/help'),
 
-  setOnboardingSearchUrl: (url?: string) =>
-    post<{ search_url: string }>('/onboarding/search-url', url ? { url } : {}),
+  setOnboardingSearch: (payload: SearchSetupPayload) =>
+    post<{ search_url: string }>('/onboarding/search', payload),
   setOnboardingPreferences: (payload: PreferencesPayload) =>
     post<{ ok: boolean }>('/onboarding/preferences', payload),
   finishOnboarding: () => post<SyncSummary>('/onboarding/finish'),

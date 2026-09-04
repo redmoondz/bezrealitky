@@ -24,16 +24,20 @@ from aiogram.types import (
 )
 
 from src import db
-from src.configuration import ConfigurationError, load_config, validate_search_url
+from src.configuration import ConfigurationError, build_search_url, load_config
+from src.geocoding import GeocodingError, resolve_location
 from src.scheduler import run_once_for_user
 from src.scraper import parse_number
 
 from .. import config, i18n, notify_loop
 from ..access import IsAllowed, denial_text_for
 from ..keyboards import (
+    currency_keyboard,
+    estate_type_keyboard,
     furniture_preference_keyboard,
     language_keyboard,
-    onboarding_keyboard,
+    location_keyboard,
+    offer_type_keyboard,
     pets_preference_keyboard,
     skip_keyboard,
 )
@@ -43,7 +47,11 @@ router = Router(name="start")
 
 class Onboarding(StatesGroup):
     waiting_for_language = State()
-    waiting_for_url = State()
+    waiting_for_offer_type = State()
+    waiting_for_estate_type = State()
+    waiting_for_currency = State()
+    waiting_for_location = State()
+    waiting_for_price_to = State()
     waiting_for_pets = State()
     waiting_for_budget = State()
     waiting_for_area = State()
@@ -108,10 +116,6 @@ def _queue_count(telegram_user_id: int) -> int:
         return db.count_relevant_listings(conn, telegram_user_id)
 
 
-def _default_search_url() -> str:
-    return load_config()["search"]["url"]
-
-
 def _save_and_run(telegram_user_id: int, search_url: str):
     with db.connect() as conn:
         db.ensure_schema(conn)
@@ -135,6 +139,66 @@ def _parse_preference_number(text: str):
     if value is None or value <= 0:
         return None
     return value
+
+
+async def _ask_offer_type(message: Message, state: FSMContext, language: str) -> None:
+    await state.set_state(Onboarding.waiting_for_offer_type)
+    await message.answer(i18n.t("offer_type_prompt", language), reply_markup=offer_type_keyboard(language))
+
+
+async def _ask_estate_type(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    language = data.get("language", "en")
+    await state.set_state(Onboarding.waiting_for_estate_type)
+    await message.answer(i18n.t("estate_type_prompt", language), reply_markup=estate_type_keyboard(language))
+
+
+async def _ask_currency(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    language = data.get("language", "en")
+    await state.set_state(Onboarding.waiting_for_currency)
+    await message.answer(i18n.t("currency_prompt", language), reply_markup=currency_keyboard(language))
+
+
+async def _ask_location(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    language = data.get("language", "en")
+    await state.set_state(Onboarding.waiting_for_location)
+    await message.answer(i18n.t("location_prompt", language), reply_markup=location_keyboard(language))
+
+
+async def _ask_price_to(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    currency = data.get("currency", _DEFAULT_CURRENCY)
+    language = data.get("language", "en")
+    await state.set_state(Onboarding.waiting_for_price_to)
+    await message.answer(
+        i18n.t("price_to_prompt", language, currency=escape(currency)),
+        parse_mode="HTML",
+        reply_markup=skip_keyboard("price_pref:skip", language),
+    )
+
+
+async def _finish_search_setup(message: Message, state: FSMContext, *, price_to: float | None) -> None:
+    """Builds the search URL from the FSM-collected onboarding answers and
+    moves on to the pets/budget/... preference questions — the shared next
+    step whether the price question was answered or skipped.
+    """
+    data = await state.get_data()
+    language = data.get("language", "en")
+    try:
+        search_url = build_search_url(
+            offer_type=data["offer_type"],
+            estate_type=data["estate_type"],
+            currency=data.get("currency", _DEFAULT_CURRENCY),
+            location=data.get("location"),
+            price_to=int(price_to) if price_to is not None else None,
+        )
+    except ConfigurationError as exc:
+        await message.answer(i18n.t("onboarding_scrape_failed", language, error=str(exc)))
+        await state.clear()
+        return
+    await _ask_pets(message, state, search_url, language)
 
 
 async def _ask_pets(message: Message, state: FSMContext, search_url: str, language: str) -> None:
@@ -254,41 +318,80 @@ async def help_command(message: Message) -> None:
     await message.answer(i18n.t("help_text", language), parse_mode="HTML")
 
 
-@router.message(Onboarding.waiting_for_url, F.text, ~F.text.startswith("/"), IsAllowed())
-async def onboarding_receive_url(message: Message, state: FSMContext) -> None:
+@router.callback_query(Onboarding.waiting_for_offer_type, F.data.startswith("offer_type:"), IsAllowed())
+async def onboarding_offer_type_answered(query: CallbackQuery, state: FSMContext) -> None:
+    offer_type = query.data.split(":", 1)[1]
+    await query.answer()
+    await state.update_data(offer_type=offer_type)
+    if query.message:
+        await _ask_estate_type(query.message, state)
+
+
+@router.callback_query(Onboarding.waiting_for_offer_type, F.data.startswith("offer_type:"))
+async def onboarding_offer_type_answered_denied(query: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    await query.answer(await denial_text_for(query.from_user.id), show_alert=True)
+
+
+@router.callback_query(Onboarding.waiting_for_estate_type, F.data.startswith("estate_type:"))
+async def onboarding_estate_type_answered(query: CallbackQuery, state: FSMContext) -> None:
+    estate_type = query.data.split(":", 1)[1]
+    await query.answer()
+    await state.update_data(estate_type=estate_type)
+    if query.message:
+        await _ask_currency(query.message, state)
+
+
+@router.callback_query(Onboarding.waiting_for_currency, F.data.startswith("currency:"))
+async def onboarding_currency_answered(query: CallbackQuery, state: FSMContext) -> None:
+    currency = query.data.split(":", 1)[1]
+    await query.answer()
+    await state.update_data(currency=currency)
+    if query.message:
+        await _ask_location(query.message, state)
+
+
+@router.message(Onboarding.waiting_for_location, F.text, ~F.text.startswith("/"))
+async def onboarding_location_answered(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     language = data.get("language", "en")
     try:
-        search_url = validate_search_url(message.text)
-    except ConfigurationError as exc:
+        location = await asyncio.to_thread(resolve_location, message.text)
+    except GeocodingError as exc:
         await message.answer(
-            i18n.t("onboarding_invalid_url", language, error=str(exc)),
-            reply_markup=onboarding_keyboard(language),
+            i18n.t("location_not_found", language, error=str(exc)),
+            reply_markup=location_keyboard(language),
         )
         return
-    await _ask_pets(message, state, search_url, language)
+    await state.update_data(location=location)
+    await _ask_price_to(message, state)
 
 
-@router.message(Onboarding.waiting_for_url, F.text, ~F.text.startswith("/"))
-async def onboarding_receive_url_denied(message: Message, state: FSMContext) -> None:
-    await state.clear()
-    await message.answer(await denial_text_for(message.from_user.id))
-
-
-@router.callback_query(F.data == "onboarding:skip", IsAllowed())
-async def onboarding_skip(query: CallbackQuery, state: FSMContext) -> None:
+@router.callback_query(Onboarding.waiting_for_location, F.data == "location_pref:skip")
+async def onboarding_location_skipped(query: CallbackQuery, state: FSMContext) -> None:
     await query.answer()
     if query.message:
+        await _ask_price_to(query.message, state)
+
+
+@router.message(Onboarding.waiting_for_price_to, F.text, ~F.text.startswith("/"))
+async def onboarding_price_to_answered(message: Message, state: FSMContext) -> None:
+    value = _parse_preference_number(message.text)
+    if value is None:
         data = await state.get_data()
         language = data.get("language", "en")
-        search_url = await asyncio.to_thread(_default_search_url)
-        await _ask_pets(query.message, state, search_url, language)
+        await message.answer(
+            i18n.t("number_retry", language), reply_markup=skip_keyboard("price_pref:skip", language)
+        )
+        return
+    await _finish_search_setup(message, state, price_to=value)
 
 
-@router.callback_query(F.data == "onboarding:skip")
-async def onboarding_skip_denied(query: CallbackQuery, state: FSMContext) -> None:
-    await state.clear()
-    await query.answer(await denial_text_for(query.from_user.id), show_alert=True)
+@router.callback_query(Onboarding.waiting_for_price_to, F.data == "price_pref:skip")
+async def onboarding_price_to_skipped(query: CallbackQuery, state: FSMContext) -> None:
+    await query.answer()
+    if query.message:
+        await _finish_search_setup(query.message, state, price_to=None)
 
 
 @router.callback_query(Onboarding.waiting_for_pets, F.data.startswith("pets_pref:"))
@@ -445,11 +548,9 @@ async def on_start_language_chosen(query: CallbackQuery, state: FSMContext) -> N
         if query.message:
             await query.message.answer(i18n.t("help_text", code), parse_mode="HTML")
         return
-    await state.set_state(Onboarding.waiting_for_url)
     if query.message:
-        await query.message.answer(
-            i18n.t("onboarding_prompt", code), parse_mode="HTML", reply_markup=onboarding_keyboard(code)
-        )
+        await query.message.answer(i18n.t("onboarding_prompt", code), parse_mode="HTML")
+        await _ask_offer_type(query.message, state, code)
 
 
 @router.callback_query(F.data.startswith("lang:"))

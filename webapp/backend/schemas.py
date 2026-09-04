@@ -33,8 +33,18 @@ class SetLanguageRequest(BaseModel):
     code: str
 
 
-class SearchUrlRequest(BaseModel):
-    url: str | None = None
+class SearchSetupRequest(BaseModel):
+    """The onboarding search-setup step's answers — the backend builds the
+    actual bezrealitky.com search URL from these instead of the user pasting
+    one themselves. ``location`` is a free-text place name (e.g. "Brno"),
+    geocoded server-side; omit it for a nationwide search.
+    """
+
+    offer_type: str
+    estate_type: str
+    currency: str = "CZK"
+    location: str | None = None
+    price_to: int | None = None
 
 
 class PreferencesRequest(BaseModel):

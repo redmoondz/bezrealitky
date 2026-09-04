@@ -28,14 +28,47 @@ def language_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def onboarding_keyboard(language: str) -> InlineKeyboardMarkup:
+def offer_type_keyboard(language: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(
-                    text=i18n.t("use_default_search_button", language), callback_data="onboarding:skip"
-                )
+                InlineKeyboardButton(text=i18n.t("offer_type_rent_button", language), callback_data="offer_type:PRONAJEM"),
+                InlineKeyboardButton(text=i18n.t("offer_type_buy_button", language), callback_data="offer_type:PRODEJ"),
             ]
+        ]
+    )
+
+
+def estate_type_keyboard(language: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text=i18n.t("estate_type_apartment_button", language), callback_data="estate_type:BYT"),
+                InlineKeyboardButton(text=i18n.t("estate_type_house_button", language), callback_data="estate_type:DUM"),
+            ],
+            [
+                InlineKeyboardButton(text=i18n.t("estate_type_land_button", language), callback_data="estate_type:POZEMEK"),
+                InlineKeyboardButton(text=i18n.t("estate_type_garage_button", language), callback_data="estate_type:GARAZ"),
+            ],
+        ]
+    )
+
+
+def currency_keyboard(language: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="CZK", callback_data="currency:CZK"),
+                InlineKeyboardButton(text="EUR", callback_data="currency:EUR"),
+            ]
+        ]
+    )
+
+
+def location_keyboard(language: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=i18n.t("whole_country_button", language), callback_data="location_pref:skip")]
         ]
     )
 

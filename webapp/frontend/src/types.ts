@@ -100,6 +100,14 @@ export interface SearchUpdatePayload {
   max_retries?: number
 }
 
+export interface SearchSetupPayload {
+  offer_type: string
+  estate_type: string
+  currency: string
+  location?: string
+  price_to?: number
+}
+
 export interface PreferencesPayload {
   wants_pets?: boolean
   budget_total_price?: number
